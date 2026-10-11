@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Flight Tracker{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<section class="pagehead">
+  <h1>Flight <span class="grn">Tracker</span></h1>
+  <p class="sub">Live commercial flight status by flight number.</p>
+</section>
+{% if key_missing %}
+<section class="notice">
+  <h2>API key required</h2>
+  <p>The flight tracker needs an AviationStack API key before it can show live data.</p>
+  <ol>
+    <li>Get a free key at <a href="https://aviationstack.com/" target="_blank" rel="noopener">aviationstack.com</a> (free tier: 100 lookups/month).</li>
+    <li>Open <code>config.yaml</code> next to <code>SentinelLive.exe</code> and paste the key into <code>flight_api.api_key</code>.</li>
+    <li>Restart the SentinelLiveServer scheduled task (or reboot).</li>
+  </ol>
+</section>
+{% endif %}
+<form class="searchbar" method="get" action="/flights">
+  <input name="q" value="{{ q|e }}" placeholder="Flight number — e.g. AA100, UAL512, SWA204" autocomplete="off">
+  <button type="submit">Track</button>
+</form>
+{% if error %}
+<section class="notice"><p>{{ error }}</p></section>
+{% endif %}
+{% if result %}
+<section class="flight">
+  <h2>{{ result.number }} <span class="dim">{{ result.airline }}</span></h2>
+  <p class="status-pill">{{ result.status.replace('_', ' ') }}</p>
+  <div class="route">
+    <div>
+      <h3>{{ result.departure.iata or '???' }}</h3>
+      <p>{{ result.departure.airport or '' }}</p>
+      <p class="dim">Sched {{ result.departure.scheduled or '—' }} &middot; Est {{ result.departure.estimated or '—' }}</p>
+      {% if result.departure.actual %}<p>Departed {{ result.departure.actual }}</p>{% endif %}
+      {% if result.departure.delay %}<p class="warn">Delayed {{ result.departure.delay }} min</p>{% endif %}
+    </div>
+    <div class="arrow">&rarr;</div>
+    <div>
+      <h3>{{ result.arrival.iata or '???' }}</h3>
+      <p>{{ result.arrival.airport or '' }}</p>
+      <p class="dim">Sched {{ result.arrival.scheduled or '—' }} &middot; Est {{ result.arrival.estimated or '—' }}</p>
+      {% if result.arrival.actual %}<p>Arrived {{ result.arrival.actual }}</p>{% endif %}
+      {% if result.arrival.delay %}<p class="warn">Delayed {{ result.arrival.delay }} min</p>{% endif %}
+    </div>
+  </div>
+  {% if result.aircraft %}<p class="dim">Aircraft reg: {{ result.aircraft }}</p>{% endif %}
+  <div id="fmap" class="map small"></div>
+</section>
+<script>
+(function () {
+  const coords = {{ airport_coords|tojson }};
+  const dep = {{ (result.departure.iata or '')|tojson }};
+  const arr = {{ (result.arrival.iata or '')|tojson }};
+  if (coords[dep] && coords[arr]) {
+    const map = L.map('fmap').setView([39, -98], 3);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+      {attribution: '&copy; OpenStreetMap &copy; CARTO'}).addTo(map);
+    const a = coords[dep], b = coords[arr];
+    L.marker(a).bindPopup(dep).addTo(map);
+    L.marker(b).bindPopup(arr).addTo(map);
+    L.polyline([a, b], {color: '#00e676', weight: 2, dashArray: '6 8', className: 'arc'}).addTo(map);
+    map.fitBounds([a, b], {padding: [40, 40]});
+  } else {
+    document.getElementById('fmap').innerHTML = '<p class="dim pad">Route map unavailable for these airports.</p>';
+  }
+})();
+</script>
+{% endif %}
+{% endblock %}
