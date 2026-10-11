@@ -150,6 +150,7 @@ app.mount("/static", StaticFiles(directory=res_dir("static")), name="static")
 templates = Jinja2Templates(directory=str(res_dir("templates")))
 
 # in-memory live-data store (SQLite holds the persistent stuff)
+STARTED_AT = None
 store = {
     "threat": {"updated": None, "status": "starting", "attacks_today": 0,
                "sources_today": 0, "families": [], "countries": [],
@@ -240,6 +241,8 @@ def _load_briefing():
 
 @app.on_event("startup")
 async def _startup():
+    global STARTED_AT
+    STARTED_AT = _utcnow()
     await init_db()
     _load_briefing()
     fcfg, to = config["feeds"], config["feeds"]["request_timeout_seconds"]
@@ -308,8 +311,22 @@ async def admin_page(request: Request):
 @app.get("/health")
 async def health():
     return {"ok": True, "time": _utcnow(), "frozen": FROZEN,
+            "uptime_seconds": int((_utcnow() - STARTED_AT).total_seconds()) if STARTED_AT else None,
             "feeds": {k: {"updated": v.get("updated"), "status": v.get("status")}
                       for k, v in store.items() if k != "briefing"}}
+
+
+@app.get("/status", response_class=HTMLResponse)
+async def status_page(request: Request):
+    uptime = int((_utcnow() - STARTED_AT).total_seconds()) if STARTED_AT else 0
+    feeds = []
+    for k, v in store.items():
+        if k == "briefing":
+            continue
+        feeds.append({"name": k, "updated": v.get("updated"),
+                      "status": v.get("status", "unknown")})
+    return templates.TemplateResponse(request, "status.html", _ctx(
+        request, uptime=uptime, started=STARTED_AT, feeds=feeds))
 
 
 # ------------------------------------------------------------------ live-data JSON
