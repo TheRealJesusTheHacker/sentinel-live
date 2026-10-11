@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}News Hub{% endblock %}
+{% block content %}
+<section class="pagehead">
+  <h1>News <span class="grn">Hub</span></h1>
+  <p class="sub">Daily briefing and live headlines across the beats that matter.</p>
+  {% if news.updated %}<p class="dim">Feeds last updated {{ news.updated }}</p>{% endif %}
+</section>
+{% if briefing %}
+<section class="briefing">
+  <h2>Daily Briefing &mdash; {{ briefing.date or '' }}</h2>
+  {% for sec, items in briefing.sections.items() %}
+  <h3>{{ sec }}</h3>
+  <ul>
+    {% for it in items %}
+    <li>{% if it.url %}<a href="{{ it.url }}" target="_blank" rel="noopener">{{ it.title }}</a>{% else %}{{ it.title }}{% endif %}{% if it.summary %}<br><span class="dim">{{ it.summary }}</span>{% endif %}</li>
+    {% endfor %}
+  </ul>
+  {% endfor %}
+</section>
+{% endif %}
+{% for sec, items in news.sections.items() %}
+<section>
+  <h2>{{ sec }}</h2>
+  {% if items %}
+  <div class="stories">
+    {% for s in items %}
+    <article class="story">
+      <h3>{% if s.link %}<a href="{{ s.link }}" target="_blank" rel="noopener">{{ s.title }}</a>{% else %}{{ s.title }}{% endif %}</h3>
+      <p class="meta">{{ s.source }}{% if s.published %} &middot; {{ s.published }}{% endif %}</p>
+    </article>
+    {% endfor %}
+  </div>
+  {% else %}
+  <p class="dim">No stories right now.</p>
+  {% endif %}
+</section>
+{% endfor %}
+{% if news.error %}<p class="dim">{{ news.error }}</p>{% endif %}
+{% endblock %}
