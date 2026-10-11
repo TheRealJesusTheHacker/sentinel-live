@@ -1,0 +1,76 @@
+# Sentinel Live Server configuration
+# Edit this file, then (re)start the server. Never commit real API keys to git.
+
+server:
+  host: "127.0.0.1"     # bind locally; Cloudflare Tunnel exposes it publicly
+  port: 8443
+
+feeds:
+  threat_refresh_minutes: 5
+  geo_refresh_minutes: 15
+  news_refresh_minutes: 30
+  request_timeout_seconds: 20
+
+# Optional: free abuse.ch Auth-Key (https://auth.abuse.ch/) enriches the
+# threat map with ThreatFox malware-family data. Without it, the map still
+# works fully on the keyless SANS DShield feed.
+threat_feeds:
+  abuse_ch_auth_key: ""
+
+# Flight lookup (AviationStack). The owner pastes a key here when ready.
+# Free signup: https://aviationstack.com/  (free tier = 100 req/month)
+flight_api:
+  provider: "aviationstack"
+  api_key: ""           # <-- PASTE KEY HERE, e.g. "abc123..."
+
+# Cloudflare Tunnel (optional). If enabled, install.ps1 creates a second
+# scheduled task that keeps the tunnel running alongside the server.
+tunnel:
+  enabled: false
+  cloudflared_path: "C:\\Program Files\\cloudflared\\cloudflared.exe"
+  # Quick tunnel (no account needed, random URL):
+  args: "tunnel --url http://127.0.0.1:8443"
+  # Named tunnel example (needs cloudflared login + DNS route):
+  # args: "tunnel --hostname live.sentinelsafeguard.com --url http://127.0.0.1:8443"
+
+# Shared secret for POST /api/briefing. Leave empty to allow local posts
+# without a token (the port is localhost-only by default).
+briefing_token: ""
+
+# Admin API/page access. Always allowed from localhost (127.0.0.1).
+# Set a key to ALSO allow remote admin access via the X-Admin-Key header.
+admin_key: ""
+
+# RSS sources. Add/remove freely; failures are tolerated per-feed.
+rss:
+  geopolitical:
+    - "https://www.aljazeera.com/xml/rss/all.xml"
+    - "https://feeds.bbci.co.uk/news/world/rss.xml"
+    - "https://rss.dw.com/xml/rss-en-world"
+  news_sections:
+    National:
+      - "https://feeds.npr.org/1001/rss.xml"
+      - "https://www.pbs.org/newshour/feeds/rss/headlines"
+    Missouri:
+      - "https://fox4kc.com/feed/"
+      - "https://www.ozarksfirst.com/feed/"
+      - "https://www.stltoday.com/search/?l=10&sd=desc&s=start_time&f=rss"
+    Kansas City:
+      - "https://www.kcur.org/term/news/rss.xml"
+      - "https://www.kmbc.com/topstories-rss"
+    Geopolitical:
+      - "https://www.aljazeera.com/xml/rss/all.xml"
+      - "https://feeds.bbci.co.uk/news/world/rss.xml"
+    Cyber:
+      - "https://krebsonsecurity.com/feed/"
+      - "https://www.bleepingcomputer.com/feed/"
+      - "https://feeds.feedburner.com/TheHackersNews"
+    Political:
+      - "https://thehill.com/feed/"
+    Markets:
+      - "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+      - "https://feeds.marketwatch.com/marketwatch/topstories/"
+
+logging:
+  file: "logs/server.log"
+  level: "INFO"
