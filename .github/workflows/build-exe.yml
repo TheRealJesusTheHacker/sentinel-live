@@ -1,0 +1,34 @@
+name: Build Windows EXE
+
+# Builds SentinelLive.exe automatically whenever a GitHub release is published.
+# The .exe is attached to the release — the owner downloads it, nothing else.
+on:
+  release:
+    types: [published]
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt pyinstaller
+
+      - name: Build single-file exe
+        shell: pwsh
+        run: |
+          pyinstaller --noconfirm --onefile --noconsole --name SentinelLive `
+            --add-data "templates;templates" `
+            --add-data "static;static" `
+            --hidden-import aiosqlite `
+            app.py
+
+      - name: Attach exe to release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/SentinelLive.exe
