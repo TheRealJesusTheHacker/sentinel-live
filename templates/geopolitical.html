@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}Geopolitical Feed{% endblock %}
+{% block head %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+{% endblock %}
+{% block content %}
+<section class="pagehead">
+  <h1>Geopolitical <span class="grn">Feed</span></h1>
+  <p class="sub">Live world-event headlines with hotspot mapping and an automated impact note per story.</p>
+  <p id="upd" class="dim">Loading&hellip;</p>
+</section>
+<div id="map" class="map"></div>
+<section>
+  <h2>Latest stories</h2>
+  <div id="stories"><p class="dim">Loading&hellip;</p></div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+const map = L.map('map', {worldCopyJump: true}).setView([28, 8], 2);
+L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+  {attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 6}).addTo(map);
+const hotIcon = L.divIcon({className: 'hot', iconSize: [12, 12]});
+let layers = [];
+async function load() {
+  try {
+    const r = await fetch('/api/geo-data');
+    const d = await r.json();
+    document.getElementById('upd').textContent =
+      'Last updated ' + (d.updated || 'never') + (d.error ? ' — ' + d.error : '');
+    layers.forEach(l => map.removeLayer(l)); layers = [];
+    (d.hotspots || []).forEach(h => {
+      const m = L.marker([h.lat, h.lon], {icon: hotIcon})
+        .bindPopup('<b>' + esc(h.label) + '</b><br>' + esc(h.title));
+      m.addTo(map); layers.push(m);
+    });
+    document.getElementById('stories').innerHTML = (d.items || []).map(s =>
+      '<article class="story"><h3>' + (s.link ? '<a href="' + esc(s.link) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>' : esc(s.title)) + '</h3>' +
+      '<p class="meta">' + esc(s.source || '') + (s.published ? ' &middot; ' + esc(s.published) : '') + '</p>' +
+      '<p class="impact"><b>Potential impact:</b> ' + esc(s.impact || '') + '</p></article>').join('')
+      || '<p class="dim">No stories right now.</p>';
+  } catch (e) {
+    document.getElementById('upd').textContent = 'Could not reach the server — retrying.';
+  }
+}
+function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+load();
+setInterval(load, 120000);
+</script>
+{% endblock %}
