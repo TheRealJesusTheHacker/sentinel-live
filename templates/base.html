@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}Sentinel Live{% endblock %} — Sentinel Safeguard LLC</title>
+<link rel="stylesheet" href="/static/style.css">
+{% block head %}{% endblock %}
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/"><span class="mark">&#9670;</span> SENTINEL <em>LIVE</em></a>
+  <nav>
+    <a href="/">Home</a>
+    <a href="/threat-map">Threat Map</a>
+    <a href="/geopolitical">Geopolitical</a>
+    <a href="/flights">Flights</a>
+    <a href="/news">News</a>
+  </nav>
+</header>
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>
+  <span>Sentinel Safeguard LLC &middot; Kansas City, MO</span>
+  <span class="dim">Data refreshes automatically &middot; sources: SANS DShield, public RSS</span>
+</footer>
+{% block scripts %}{% endblock %}
+</body>
+</html>
