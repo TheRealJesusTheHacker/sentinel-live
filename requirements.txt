@@ -1,0 +1,9 @@
+# Sentinel Live Server — minimal, Windows-friendly dependencies
+# (PyInstaller bundles these into the single-file .exe; no Python needed on aroura)
+fastapi>=0.110
+uvicorn>=0.29
+httpx>=0.27
+jinja2>=3.1
+pyyaml>=6.0
+feedparser>=6.0.11
+aiosqlite>=0.19
