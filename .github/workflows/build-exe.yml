@@ -29,6 +29,9 @@ jobs:
             app.py
 
       - name: Attach exe to release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/SentinelLive.exe
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if (!(Test-Path "dist/SentinelLive.exe")) { Write-Error "exe not found"; exit 1 }
+          gh release upload "${{ github.ref_name }}" dist/SentinelLive.exe --clobber
