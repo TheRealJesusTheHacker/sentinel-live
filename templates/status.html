@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+{% block title %}Server Status — Sentinel Live{% endblock %}
+{% block content %}
+<h1>Server Status</h1>
+<div class="status-grid">
+  <div class="stat-card ok">
+    <div class="stat-label">Server</div>
+    <div class="stat-value"><span class="pulse"></span> ONLINE</div>
+    <div class="stat-sub">Started {{ started }} UTC</div>
+  </div>
+  <div class="stat-card">
+    <div class="stat-label">Uptime</div>
+    <div class="stat-value" id="uptime">{{ uptime }}s</div>
+    <div class="stat-sub">since last start</div>
+  </div>
+</div>
+<h2>Feeds</h2>
+<table class="status-table">
+  <tr><th>Feed</th><th>Status</th><th>Last updated</th></tr>
+  {% for f in feeds %}
+  <tr>
+    <td>{{ f.name }}</td>
+    <td><span class="badge {{ f.status }}">{{ f.status }}</span></td>
+    <td>{{ f.updated or "—" }}</td>
+  </tr>
+  {% endfor %}
+</table>
+<p class="dim">Ping endpoint for machines: <code>/health</code> (JSON)</p>
+{% endblock %}
+{% block scripts %}
+<script>
+const t0 = {{ uptime }};
+const el = document.getElementById('uptime');
+const start = Date.now();
+setInterval(() => {
+  const s = t0 + Math.floor((Date.now() - start) / 1000);
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  el.textContent = (h ? h + 'h ' : '') + (m ? m + 'm ' : '') + (s % 60) + 's';
+}, 1000);
+</script>
+{% endblock %}
