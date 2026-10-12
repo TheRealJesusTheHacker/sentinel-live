@@ -232,6 +232,13 @@ async def fetch_threat(timeout=20, abuse_ch_key=""):
 
 
 # --------------------------------------------------------------------- rss
+def _safe_url(url):
+    u = (url or "").strip()
+    if u.lower().startswith(("http://", "https://")):
+        return u
+    return ""
+
+
 def _parse_rss(content, limit=8):
     items = []
     try:
@@ -242,7 +249,7 @@ def _parse_rss(content, limit=8):
                 continue
             items.append({
                 "title": title,
-                "link": e.get("link") or "",
+                "link": _safe_url(e.get("link")),
                 "published": e.get("published") or e.get("updated") or "",
                 "source": (parsed.feed.get("title") or "").strip()[:40],
             })
