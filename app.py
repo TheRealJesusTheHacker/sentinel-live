@@ -11,6 +11,7 @@ All persistent storage is an embedded SQLite file next to the exe.
 Logs go to ./logs/server.log (there is no console in the .exe build).
 """
 import asyncio
+import hmac
 import csv
 import io
 import json
@@ -142,7 +143,7 @@ app = FastAPI(title="Sentinel Live Server", docs_url=None, redoc_url=None,
               openapi_url=None)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=config.get("cors_origins") or ["*"],
+    allow_origins=config.get("cors_origins") or [],
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
@@ -180,8 +181,14 @@ CREATE TABLE IF NOT EXISTS newsletter(
 """
 
 
+async def _db():
+    db = await aiosqlite.connect(DB_PATH, timeout=30)
+    await db.execute("PRAGMA journal_mode=WAL")
+    return db
+
+
 async def init_db():
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         await db.executescript(SCHEMA)
         await db.commit()
     log.info("SQLite ready at %s", DB_PATH)
@@ -195,8 +202,18 @@ def _utcnow():
 _hits = defaultdict(list)
 
 
+def _real_ip(request: Request):
+    # Behind the Cloudflare Tunnel every connection looks like localhost —
+    # use the real client IP Cloudflare reports instead.
+    if config.get("tunnel", {}).get("enabled"):
+        return (request.headers.get("CF-Connecting-IP")
+                or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                or (request.client.host if request.client else "?"))
+    return request.client.host if request.client else "?"
+
+
 def rate_limit(request: Request, max_hits: int = 20, window: int = 600):
-    ip = request.client.host if request.client else "?"
+    ip = _real_ip(request)
     now = time.time()
     keep = [t for t in _hits[ip] if now - t < window]
     if len(keep) >= max_hits:
@@ -206,11 +223,15 @@ def rate_limit(request: Request, max_hits: int = 20, window: int = 600):
 
 
 def require_admin(request: Request):
+    # When the Cloudflare Tunnel is on, all public traffic arrives as
+    # localhost — so the localhost bypass must NOT apply then.
+    tunneled = bool(config.get("tunnel", {}).get("enabled"))
     host = request.client.host if request.client else ""
-    if host in ("127.0.0.1", "::1", "localhost"):
+    if not tunneled and host in ("127.0.0.1", "::1", "localhost"):
         return True
-    key = request.headers.get("X-Admin-Key", "") or request.query_params.get("key", "")
-    if config.get("admin_key") and key == config["admin_key"]:
+    key = request.headers.get("X-Admin-Key", "")
+    expected = config.get("admin_key") or ""
+    if expected and key and hmac.compare_digest(key, expected):
         return True
     raise HTTPException(403, "Admin access denied.")
 
@@ -242,7 +263,7 @@ def _load_briefing():
 @app.on_event("startup")
 async def _startup():
     global STARTED_AT
-    STARTED_AT = _utcnow()
+    STARTED_AT = datetime.now(timezone.utc)
     await init_db()
     _load_briefing()
     fcfg, to = config["feeds"], config["feeds"]["request_timeout_seconds"]
@@ -310,15 +331,17 @@ async def admin_page(request: Request):
 
 @app.get("/health")
 async def health():
-    return {"ok": True, "time": _utcnow(), "frozen": FROZEN,
-            "uptime_seconds": int((_utcnow() - STARTED_AT).total_seconds()) if STARTED_AT else None,
+    now = datetime.now(timezone.utc)
+    return {"ok": True, "time": now.isoformat(timespec="seconds"), "frozen": FROZEN,
+            "uptime_seconds": int((now - STARTED_AT).total_seconds()) if STARTED_AT else None,
             "feeds": {k: {"updated": v.get("updated"), "status": v.get("status")}
                       for k, v in store.items() if k != "briefing"}}
 
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_page(request: Request):
-    uptime = int((_utcnow() - STARTED_AT).total_seconds()) if STARTED_AT else 0
+    now = datetime.now(timezone.utc)
+    uptime = int((now - STARTED_AT).total_seconds()) if STARTED_AT else 0
     feeds = []
     for k, v in store.items():
         if k == "briefing":
@@ -326,7 +349,9 @@ async def status_page(request: Request):
         feeds.append({"name": k, "updated": v.get("updated"),
                       "status": v.get("status", "unknown")})
     return templates.TemplateResponse(request, "status.html", _ctx(
-        request, uptime=uptime, started=STARTED_AT, feeds=feeds))
+        request, uptime=uptime,
+        started=STARTED_AT.isoformat(timespec="seconds") if STARTED_AT else None,
+        feeds=feeds))
 
 
 # ------------------------------------------------------------------ live-data JSON
@@ -363,7 +388,7 @@ async def api_contact(request: Request):
         raise HTTPException(400, "Name, a valid email, and a message are required.")
     if len(message) > 5000:
         raise HTTPException(400, "Message is too long (5000 chars max).")
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         await db.execute(
             "INSERT INTO contacts(created_at,name,email,subject,message,ip) VALUES(?,?,?,?,?,?)",
             (_utcnow(), name[:120], email[:160], (body.get("subject") or "")[:160],
@@ -390,7 +415,7 @@ async def api_ticket(request: Request):
     prio = (body.get("priority") or "Normal").strip().capitalize()
     if prio not in ("Low", "Normal", "High"):
         prio = "Normal"  # public can never file Critical
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         cur = await db.execute(
             "INSERT INTO tickets(created_at,name,email,phone,category,priority,subject,message,ip)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
@@ -413,7 +438,7 @@ async def api_newsletter(request: Request):
     email = (body.get("email") or "").strip()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required.")
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         try:
             await db.execute(
                 "INSERT INTO newsletter(created_at,email,name,ip) VALUES(?,?,?,?)",
@@ -438,6 +463,16 @@ async def api_briefing(request: Request):
         raise HTTPException(400, "Invalid JSON.")
     if not isinstance(body, dict) or "sections" not in body:
         raise HTTPException(400, 'Body must be {"date": "...", "sections": {...}}.')
+    # sanitize briefing URLs (defense against javascript: scheme XSS)
+    try:
+        from feeds import _safe_url
+        for sec_items in body["sections"].values():
+            if isinstance(sec_items, list):
+                for it in sec_items:
+                    if isinstance(it, dict) and it.get("url"):
+                        it["url"] = _safe_url(it["url"])
+    except Exception:
+        pass
     body["ingested_at"] = _utcnow()
     BRIEFING_PATH.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
     store["briefing"] = body
@@ -457,7 +492,7 @@ async def admin_submissions(request: Request, type: str = "tickets",
     if not table:
         raise HTTPException(400, "type must be contacts, tickets, or newsletter")
     limit = max(1, min(limit, 500))
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
                 f"SELECT * FROM {table} ORDER BY id DESC LIMIT ? OFFSET ?",
@@ -474,7 +509,7 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
     table = _TABLES.get(type)
     if not table:
         raise HTTPException(400, "type must be contacts, tickets, or newsletter")
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(f"SELECT * FROM {table} ORDER BY id DESC") as cur:
             rows = [dict(r) for r in await cur.fetchall()]
@@ -500,7 +535,7 @@ async def admin_ticket_update(request: Request, ticket_id: int):
     status = (body.get("status") or "").strip().lower()
     if status not in ("new", "open", "in_progress", "resolved", "closed"):
         raise HTTPException(400, "Invalid status.")
-    async with aiosqlite.connect(DB_PATH) as db:
+    async with await _db() as db:
         await db.execute("UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
                          (status, (body.get("admin_notes") or "")[:2000], ticket_id))
         await db.commit()
