@@ -258,14 +258,32 @@ def _parse_rss(content, limit=8):
     return items
 
 
+# Max bytes accepted for a single RSS response (SL3-3).
+RSS_MAX_BYTES = 5 * 1024 * 1024
+
+
 async def fetch_rss_items(urls, timeout=20, limit_per_feed=6):
     items = []
     async with _make_client(follow_redirects=True) as client:
         async def one(url):
             try:
-                r = await client.get(url, timeout=timeout)
-                r.raise_for_status()
-                return _parse_rss(r.content, limit_per_feed)
+                # SL3-3: cap the response size — Content-Length first, then a
+                # byte cap while streaming, so a hostile feed can't OOM us.
+                async with client.stream("GET", url, timeout=timeout) as r:
+                    r.raise_for_status()
+                    try:
+                        cl = int(r.headers.get("content-length") or 0)
+                    except (TypeError, ValueError):
+                        cl = 0
+                    if cl > RSS_MAX_BYTES:
+                        return []
+                    chunks, total = [], 0
+                    async for chunk in r.aiter_bytes(65536):
+                        total += len(chunk)
+                        if total > RSS_MAX_BYTES:
+                            return []
+                        chunks.append(chunk)
+                return _parse_rss(b"".join(chunks), limit_per_feed)
             except Exception:
                 return []
         for chunk in [urls[i:i + 4] for i in range(0, len(urls), 4)]:
