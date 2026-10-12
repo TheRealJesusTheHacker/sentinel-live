@@ -16,6 +16,7 @@ import csv
 import io
 import json
 import logging
+import sqlite3
 import sys
 import time
 from collections import defaultdict
@@ -101,6 +102,11 @@ DEFAULT_CONFIG = {
 }
 
 
+# Warnings collected while merging config (the logger doesn't exist yet
+# at this point, so load_config can't log directly).
+_config_warnings = []
+
+
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -113,12 +119,23 @@ def load_config() -> dict:
         cfg = {}
     # deep-merge defaults so missing keys never crash the app
     merged = json.loads(json.dumps(DEFAULT_CONFIG))
-    def _merge(dst, src):
+
+    def _merge(dst, src, path=""):
         for k, v in src.items():
-            if isinstance(v, dict) and isinstance(dst.get(k), dict):
-                _merge(dst[k], v)
+            cur = dst.get(k)
+            here = f"{path}.{k}" if path else str(k)
+            if isinstance(v, dict) and isinstance(cur, dict):
+                _merge(cur, v, here)
+            elif k in dst and isinstance(v, dict) != isinstance(cur, dict):
+                # SL2-1: a wrong-typed value must never replace a default
+                # subtree (e.g. `server: "oops"` bricking startup) — keep
+                # the default and warn instead.
+                _config_warnings.append(
+                    f"config key '{here}' has wrong type "
+                    f"({type(v).__name__}); keeping default")
             else:
                 dst[k] = v
+
     _merge(merged, cfg)
     return merged
 
@@ -138,6 +155,111 @@ for _n in ("uvicorn", "uvicorn.error", "uvicorn.access"):
     _l.handlers = [_fh]
     _l.propagate = False
 
+# flush config-merge warnings now that the logger exists
+for _w in _config_warnings:
+    log.warning("config: %s", _w)
+_config_warnings.clear()
+
+
+def _validate_config_schema():
+    """SL2-1: critical numeric settings with wrong types get their default
+    back instead of crashing the server or the refresh loops."""
+    srv = config.get("server")
+    if isinstance(srv, dict):
+        port = srv.get("port")
+        if isinstance(port, bool) or not isinstance(port, int):
+            log.warning("config: server.port invalid (%r); using default %r",
+                        port, DEFAULT_CONFIG["server"]["port"])
+            srv["port"] = DEFAULT_CONFIG["server"]["port"]
+    fcfg = config.get("feeds")
+    if isinstance(fcfg, dict):
+        for _key in ("threat_refresh_minutes", "geo_refresh_minutes",
+                     "news_refresh_minutes", "request_timeout_seconds"):
+            _v = fcfg.get(_key)
+            if isinstance(_v, bool) or not isinstance(_v, int):
+                log.warning("config: feeds.%s invalid (%r); using default %r",
+                            _key, _v, DEFAULT_CONFIG["feeds"][_key])
+                fcfg[_key] = DEFAULT_CONFIG["feeds"][_key]
+
+
+_validate_config_schema()
+
+class _BodySizeLimitMiddleware:
+    """Pure-ASGI request body size cap (SL2-3).
+
+    Reads Content-Length first for an early 413, then caps bytes while
+    streaming so a missing/lying header can't OOM the process. Limits the
+    body endpoints to 2MB (contact/ticket/newsletter/admin) and the
+    briefing ingest (which is written to disk) to 5MB.
+    """
+    LIMIT_DEFAULT = 2 * 1024 * 1024
+    LIMITS = {"/api/briefing": 5 * 1024 * 1024}
+
+    def __init__(self, app):
+        self.app = app
+
+    def _limit_for(self, path: str) -> int:
+        for prefix, lim in self.LIMITS.items():
+            if path == prefix or path.startswith(prefix + "/"):
+                return lim
+        return self.LIMIT_DEFAULT
+
+    async def _respond_413(self, send):
+        body = b'{"detail":"Request body too large."}'
+        await send({"type": "http.response.start", "status": 413,
+                    "headers": [(b"content-type", b"application/json"),
+                                (b"content-length", str(len(body)).encode())]})
+        await send({"type": "http.response.body", "body": body,
+                    "more_body": False})
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") not in ("POST", "PATCH", "PUT"):
+            await self.app(scope, receive, send)
+            return
+        path = scope.get("path", "")
+        limit = self._limit_for(path)
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1")
+                   for k, v in scope.get("headers", [])}
+        try:
+            content_length = int(headers.get("content-length") or 0)
+        except (TypeError, ValueError):
+            content_length = 0
+        if content_length > limit:
+            log.warning("body cap 413: path=%s content-length=%d > %d",
+                        path, content_length, limit)
+            await self._respond_413(send)
+            return
+        # cap while reading (covers missing/lying Content-Length)
+        chunks, total, more_body = [], 0, True
+        while more_body:
+            message = await receive()
+            if message["type"] == "http.disconnect":
+                return
+            if message["type"] == "http.request":
+                chunk = message.get("body", b"")
+                total += len(chunk)
+                if total > limit:
+                    log.warning("body cap 413: path=%s streamed %d > %d",
+                                path, total, limit)
+                    await self._respond_413(send)
+                    return
+                chunks.append(chunk)
+                more_body = message.get("more_body", False)
+        body = b"".join(chunks)
+
+        sent = False
+
+        async def receive_replay():
+            nonlocal sent
+            if not sent:
+                sent = True
+                return {"type": "http.request", "body": body,
+                        "more_body": False}
+            return {"type": "http.disconnect"}
+
+        await self.app(scope, receive_replay, send)
+
+
 # ------------------------------------------------------------------ app
 app = FastAPI(title="Sentinel Live Server", docs_url=None, redoc_url=None,
               openapi_url=None)
@@ -147,6 +269,8 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
     allow_headers=["*"],
 )
+# outermost: reject oversized bodies before anything else touches them
+app.add_middleware(_BodySizeLimitMiddleware)
 app.mount("/static", StaticFiles(directory=res_dir("static")), name="static")
 templates = Jinja2Templates(directory=str(res_dir("templates")))
 
@@ -188,9 +312,30 @@ async def _db():
 
 
 async def init_db():
-    async with await _db() as db:
-        await db.executescript(SCHEMA)
-        await db.commit()
+    try:
+        async with await _db() as db:
+            await db.executescript(SCHEMA)
+            await db.commit()
+    except sqlite3.DatabaseError:
+        # SL4-1: a corrupt database must never brick startup — quarantine
+        # the file aside and re-initialize fresh so the server can boot.
+        # The re-init uses stdlib sqlite3 directly to keep the recovery
+        # path independent of the async wrapper.
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+        bad = DB_PATH.with_name(f"sentinel-live.db.corrupt-{ts}")
+        try:
+            if DB_PATH.exists():
+                DB_PATH.rename(bad)
+        except Exception:
+            pass  # keep going either way — the log line says where it went
+        log.critical("SQLite database corrupt — quarantined to %s; "
+                     "re-initializing fresh", bad)
+        conn = sqlite3.connect(DB_PATH)
+        try:
+            conn.executescript(SCHEMA)
+            conn.commit()
+        finally:
+            conn.close()
     log.info("SQLite ready at %s", DB_PATH)
 
 
@@ -205,9 +350,11 @@ _hits = defaultdict(list)
 def _real_ip(request: Request):
     # Behind the Cloudflare Tunnel every connection looks like localhost —
     # use the real client IP Cloudflare reports instead.
+    # SL2-2: when tunneled, trust ONLY CF-Connecting-IP. X-Forwarded-For is
+    # attacker-controlled and must never be a fallback (rate-limit bypass);
+    # without the Cloudflare header, use the TCP peer.
     if config.get("tunnel", {}).get("enabled"):
         return (request.headers.get("CF-Connecting-IP")
-                or request.headers.get("X-Forwarded-For", "").split(",")[0].strip()
                 or (request.client.host if request.client else "?"))
     return request.client.host if request.client else "?"
 
@@ -217,6 +364,8 @@ def rate_limit(request: Request, max_hits: int = 20, window: int = 600):
     now = time.time()
     keep = [t for t in _hits[ip] if now - t < window]
     if len(keep) >= max_hits:
+        # SL4-2: log rejections with real IP + path
+        log.warning("rate-limit 429: ip=%s path=%s", ip, request.url.path)
         raise HTTPException(429, "Too many requests — please slow down and retry.")
     keep.append(now)
     _hits[ip] = keep
@@ -233,6 +382,9 @@ def require_admin(request: Request):
     expected = config.get("admin_key") or ""
     if expected and key and hmac.compare_digest(key, expected):
         return True
+    # SL4-2: log denied admin attempts with real IP + path
+    log.warning("admin 403 denied: ip=%s path=%s", _real_ip(request),
+                request.url.path)
     raise HTTPException(403, "Admin access denied.")
 
 
@@ -454,14 +606,22 @@ async def api_newsletter(request: Request):
 async def api_briefing(request: Request):
     token = config.get("briefing_token") or ""
     if token:
-        got = request.headers.get("X-Briefing-Token", "") or request.query_params.get("token", "")
-        if got != token:
+        # SL3-1: token is header-only now — ?token= in the query string is
+        # no longer accepted (it leaks into logs, proxies, and history).
+        got = request.headers.get("X-Briefing-Token", "")
+        # SL3-2: constant-time comparison (hmac already imported).
+        try:
+            ok = hmac.compare_digest(got, token)
+        except TypeError:
+            ok = False
+        if not ok:
             raise HTTPException(403, "Bad briefing token.")
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    if not isinstance(body, dict) or "sections" not in body:
+    # SL2-4: sections must be a dict — anything else used to 500 below.
+    if not isinstance(body, dict) or not isinstance(body.get("sections"), dict):
         raise HTTPException(400, 'Body must be {"date": "...", "sections": {...}}.')
     # sanitize briefing URLs (defense against javascript: scheme XSS)
     try:
