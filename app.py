@@ -551,15 +551,25 @@ def _s(body, key):
     return v if isinstance(v, str) else ""
 
 
-@app.post("/api/contact")
-async def api_contact(request: Request):
-    rate_limit(request)
+async def _json_body(request: Request):
+    """Parse a request body that must be a JSON object (SL5-3).
+
+    Factored out of the form handlers, which each repeated this exact
+    parse + type check; raises the same 400 "Invalid JSON." they did,
+    for both an unparseable body and a non-dict one."""
     try:
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    if not isinstance(body, dict):  # SL5-3
+    if not isinstance(body, dict):
         raise HTTPException(400, "Invalid JSON.")
+    return body
+
+
+@app.post("/api/contact")
+async def api_contact(request: Request):
+    rate_limit(request)
+    body = await _json_body(request)
     name, email, message = _s(body, "name").strip(), _s(body, "email").strip(), \
                           _s(body, "message").strip()
     if not name or not email or not message or "@" not in email:
@@ -580,12 +590,7 @@ async def api_contact(request: Request):
 async def api_ticket(request: Request):
     """Get Help ticket intake — stores a ticket, no login required."""
     rate_limit(request, max_hits=10)
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(400, "Invalid JSON.")
-    if not isinstance(body, dict):  # SL5-3
-        raise HTTPException(400, "Invalid JSON.")
+    body = await _json_body(request)
     name, email, subject, message = (_s(body, k).strip()
                                     for k in ("name", "email", "subject", "message"))
     if not name or not email or "@" not in email or not subject or not message:
@@ -611,12 +616,7 @@ async def api_ticket(request: Request):
 @app.post("/api/newsletter")
 async def api_newsletter(request: Request):
     rate_limit(request)
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(400, "Invalid JSON.")
-    if not isinstance(body, dict):  # SL5-3
-        raise HTTPException(400, "Invalid JSON.")
+    body = await _json_body(request)
     email = _s(body, "email").strip()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required.")
@@ -681,13 +681,20 @@ async def api_briefing(request: Request):
 _TABLES = {"contacts": "contacts", "tickets": "tickets", "newsletter": "newsletter"}
 
 
+def _admin_table(type: str) -> str:
+    """Whitelist-resolve an admin `type` parameter to a table name —
+    the one validation the admin read endpoints share."""
+    table = _TABLES.get(type)
+    if not table:
+        raise HTTPException(400, "type must be contacts, tickets, or newsletter")
+    return table
+
+
 @app.get("/api/admin/submissions")
 async def admin_submissions(request: Request, type: str = "tickets",
                             limit: int = 100, offset: int = 0):
     require_admin(request)
-    table = _TABLES.get(type)
-    if not table:
-        raise HTTPException(400, "type must be contacts, tickets, or newsletter")
+    table = _admin_table(type)
     limit = max(1, min(limit, 500))
     async with await _db() as db:
         db.row_factory = aiosqlite.Row
@@ -703,9 +710,7 @@ async def admin_submissions(request: Request, type: str = "tickets",
 @app.get("/api/admin/export")
 async def admin_export(request: Request, type: str = "tickets", format: str = "csv"):
     require_admin(request)
-    table = _TABLES.get(type)
-    if not table:
-        raise HTTPException(400, "type must be contacts, tickets, or newsletter")
+    table = _admin_table(type)
     async with await _db() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(f"SELECT * FROM {table} ORDER BY id DESC") as cur:
@@ -714,16 +719,18 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
         return JSONResponse({"ok": True, "type": type, "rows": rows})
     buf = io.StringIO()
     if rows:
-        w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
-        w.writeheader()
+        fields = list(rows[0].keys())
+        w = csv.writer(buf)
+        w.writerow(fields)
         # SL5-4: spreadsheet formula injection — a stored submission
         # whose cell starts with =, +, -, @ (or tab/CR) is executed as a
         # formula when the export is opened in Excel/Sheets. Prefix
         # those cells with a quote so they stay inert text.
-        w.writerows({k: ("'" + v if isinstance(v, str)
-                          and v[:1] in ("=", "+", "-", "@", "\t", "\r")
-                          else v)
-                     for k, v in r.items()} for r in rows)
+        # (Row lists in `fields` order: the same cells DictWriter wrote,
+        # without building a throwaway dict per row.)
+        w.writerows([("'" + r[k] if isinstance(r[k], str)
+                      and r[k][:1] in ("=", "+", "-", "@", "\t", "\r")
+                      else r[k]) for k in fields] for r in rows)
     return StreamingResponse(
         io.BytesIO(buf.getvalue().encode("utf-8")), media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sentinel-{type}.csv"})
@@ -732,12 +739,7 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
 @app.patch("/api/admin/tickets/{ticket_id}")
 async def admin_ticket_update(request: Request, ticket_id: int):
     require_admin(request)
-    try:
-        body = await request.json()
-    except Exception:
-        raise HTTPException(400, "Invalid JSON.")
-    if not isinstance(body, dict):  # SL5-3
-        raise HTTPException(400, "Invalid JSON.")
+    body = await _json_body(request)
     status = _s(body, "status").strip().lower()
     if status not in ("new", "open", "in_progress", "resolved", "closed"):
         raise HTTPException(400, "Invalid status.")
