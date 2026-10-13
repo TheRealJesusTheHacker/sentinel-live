@@ -117,6 +117,14 @@ def load_config() -> dict:
             cfg = yaml.safe_load(f) or {}
     except Exception:
         cfg = {}
+    if not isinstance(cfg, dict):
+        # BH2-1: a config whose top level isn't a mapping (a stray note,
+        # a bare list/number) crashed _merge with AttributeError and
+        # bricked startup. Ignore the file, keep the defaults.
+        _config_warnings.append(
+            f"config top level is {type(cfg).__name__}, not a mapping; "
+            "ignoring the file and using defaults")
+        cfg = {}
     # deep-merge defaults so missing keys never crash the app
     merged = json.loads(json.dumps(DEFAULT_CONFIG))
 
@@ -540,7 +548,11 @@ async def api_news():
 
 # ------------------------------------------------------------------ website backend APIs
 def _client_ip(request: Request):
-    return request.client.host if request.client else ""
+    # BH2-6: store the same client IP the rate limiter and the admin
+    # logs already use. The raw TCP peer is always 127.0.0.1 behind the
+    # Cloudflare Tunnel, so the stored column was localhost for every
+    # public submission — useless for the abuse tracking it's kept for.
+    return _real_ip(request)
 
 
 def _s(body, key):
@@ -626,8 +638,11 @@ async def api_newsletter(request: Request):
                 "INSERT INTO newsletter(created_at,email,name,ip) VALUES(?,?,?,?)",
                 (_utcnow(), email[:160], _s(body, "name")[:120], _client_ip(request)))
             await db.commit()
-        except Exception:
-            pass  # duplicate email — still report success (no enumeration)
+        except aiosqlite.IntegrityError:
+            # duplicate email — still report success (no enumeration).
+            # BH2-7: only the UNIQUE violation is swallowed; any other
+            # DB failure must surface as an error, not a fake success.
+            pass
     return {"ok": True}
 
 
@@ -666,8 +681,18 @@ async def api_briefing(request: Request):
         for sec_items in body["sections"].values():
             if isinstance(sec_items, list):
                 for it in sec_items:
-                    if isinstance(it, dict) and it.get("url"):
+                    if not isinstance(it, dict) or "url" not in it:
+                        continue
+                    # BH2-2: _safe_url assumes a string. A non-string
+                    # url (number/object) used to raise here, and the
+                    # blanket except below then skipped sanitizing the
+                    # REST of the payload — javascript: URLs included.
+                    # Blank non-strings instead, and never let one bad
+                    # item disarm the pass for the others.
+                    if isinstance(it["url"], str):
                         it["url"] = _safe_url(it["url"])
+                    elif it["url"]:
+                        it["url"] = ""
     except Exception:
         pass
     body["ingested_at"] = _utcnow()
@@ -744,9 +769,15 @@ async def admin_ticket_update(request: Request, ticket_id: int):
     if status not in ("new", "open", "in_progress", "resolved", "closed"):
         raise HTTPException(400, "Invalid status.")
     async with await _db() as db:
-        await db.execute("UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
-                         (status, _s(body, "admin_notes")[:2000], ticket_id))
+        cur = await db.execute(
+            "UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
+            (status, _s(body, "admin_notes")[:2000], ticket_id))
         await db.commit()
+        changed = cur.rowcount
+    if not changed:
+        # BH2-3: the update matched no ticket — say so instead of
+        # reporting (and logging) a success that never happened.
+        raise HTTPException(404, "Ticket not found.")
     log.info("ticket #%s -> %s (admin)", ticket_id, status)
     return {"ok": True, "id": ticket_id, "status": status}
 
