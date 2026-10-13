@@ -153,6 +153,12 @@ async def fetch_threat(timeout=20, abuse_ch_key=""):
             try:
                 r = await _get(client, f"{DSHIELD}/sources/attacks/150?json", timeout)
                 sources = r.json() or []
+                if not isinstance(sources, list):
+                    # BH2-5: an error object instead of the list used
+                    # to explode later at sources[:40] (KeyError) and
+                    # take the whole fetch down.
+                    errors.append("sources: unexpected shape")
+                    sources = []
             except Exception as e:
                 errors.append(f"sources: {type(e).__name__}")
 
@@ -161,25 +167,40 @@ async def fetch_threat(timeout=20, abuse_ch_key=""):
                 async def _detail(ip):
                     try:
                         rr = await _get(client, f"{DSHIELD}/ip/{ip}?json", timeout)
-                        return (rr.json() or {}).get("ip") or {}
+                        payload = rr.json()
+                        d = payload.get("ip") if isinstance(payload, dict) else None
+                        return d if isinstance(d, dict) else {}
                     except Exception:
                         return {}
 
-                top = sources[:40]
+                # BH2-5: tolerate malformed entries — one bad source
+                # (not an object, no ip) must not take the whole map
+                # down; the healthy entries still render.
+                clean = [s for s in sources
+                         if isinstance(s, dict) and s.get("ip")]
+                top = clean[:40]
                 details = await asyncio.gather(*(_detail(s["ip"]) for s in top))
-                geo = await _geolocate_ips(client, [s["ip"] for s in sources[:60]], timeout)
+                geo = await _geolocate_ips(client, [s["ip"] for s in clean[:60]], timeout)
 
                 by_country = Counter()
                 by_type = Counter()
                 markers, feed = [], []
                 for s, d in zip(top, details):
                     ip = s["ip"]
-                    attacks = s.get("attacks") or 0
-                    feeds_seen = (d.get("threatfeeds") or {})
+                    try:
+                        attacks = int(s.get("attacks") or 0)
+                    except (TypeError, ValueError):
+                        # BH2-5: a non-numeric count from upstream is
+                        # a 0, not a reason to fail the whole fetch.
+                        attacks = 0
+                    feeds_seen = d.get("threatfeeds")
+                    if not isinstance(feeds_seen, dict):
+                        feeds_seen = {}
                     types = [ATTACK_TYPES.get(k, k) for k in feeds_seen]
                     for t in types:
                         by_type[t] += attacks
-                    cc = (d.get("ascountry") or "").upper()
+                    _cc = d.get("ascountry")
+                    cc = _cc.upper() if isinstance(_cc, str) else ""
                     g = geo.get(ip)
                     if g:
                         lat, lon, country, cc2 = g
@@ -431,22 +452,39 @@ async def lookup_flight(number, api_key, timeout=20):
     except Exception as e:
         log.warning("flight lookup for %s failed: %r", num, e)
         return None, f"Flight API request failed ({type(e).__name__})."
-    flights = (payload or {}).get("data") or []
+    # BH2-4: the provider's JSON shape was trusted below — a list
+    # payload, a dict "data", a string "error", or a null first entry
+    # raised out of this function and became a 500 on /flights.
+    # Validate the shape; anything unexpected is just "no live data".
+    if not isinstance(payload, dict):
+        return None, f"No live data for {num} right now."
+    flights = payload.get("data") or []
+    if not isinstance(flights, list):
+        flights = []
     if not flights:
-        err = (payload or {}).get("error", {})
-        return None, err.get("message") or f"No live data for {num} right now."
+        err = payload.get("error")
+        msg = err.get("message") if isinstance(err, dict) else None
+        return None, (msg if isinstance(msg, str) and msg
+                      else f"No live data for {num} right now.")
     f = flights[0]
-    dep, arr = f.get("departure") or {}, f.get("arrival") or {}
+    if not isinstance(f, dict):
+        return None, f"No live data for {num} right now."
+
+    def _sub(d, key):
+        v = d.get(key)
+        return v if isinstance(v, dict) else {}
+
+    dep, arr = _sub(f, "departure"), _sub(f, "arrival")
     return {
-        "number": (f.get("flight") or {}).get("iata") or num,
-        "airline": (f.get("airline") or {}).get("name") or "",
+        "number": _sub(f, "flight").get("iata") or num,
+        "airline": _sub(f, "airline").get("name") or "",
         "status": f.get("flight_status") or "unknown",
         "date": f.get("flight_date") or "",
         "departure": {k: dep.get(k) for k in
                       ("airport", "iata", "terminal", "gate", "scheduled", "estimated", "actual", "delay")},
         "arrival": {k: arr.get(k) for k in
                     ("airport", "iata", "terminal", "gate", "scheduled", "estimated", "actual", "delay")},
-        "aircraft": (f.get("aircraft") or {}).get("registration") or "",
+        "aircraft": _sub(f, "aircraft").get("registration") or "",
     }, None
 
 
