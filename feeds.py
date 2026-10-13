@@ -6,7 +6,7 @@ on failure they return an error status the pages render honestly.
 import asyncio
 import logging
 import re
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timezone
 
 import feedparser
@@ -290,7 +290,11 @@ async def fetch_rss_items(urls, timeout=20, limit_per_feed=6):
                         if total > RSS_MAX_BYTES:
                             return []
                         chunks.append(chunk)
-                return _parse_rss(b"".join(chunks), limit_per_feed)
+                # feedparser is CPU-bound and parses the whole document
+                # even for a small limit — run it off the event loop so a
+                # refresh can't stall request handling while it chews.
+                return await asyncio.to_thread(
+                    _parse_rss, b"".join(chunks), limit_per_feed)
             except Exception:
                 return []
         for chunk in [urls[i:i + 4] for i in range(0, len(urls), 4)]:
@@ -383,9 +387,20 @@ async def fetch_geopolitical(urls, timeout=20):
 
 async def fetch_news_sections(sections, timeout=20):
     out = {"updated": _now(), "status": "ok", "sections": {}, "error": None}
-    for name, urls in sections.items():
+
+    async def _section(urls):
         items = await fetch_rss_items(urls, timeout, limit_per_feed=6)
-        out["sections"][name] = items[:12]
+        return items[:12]
+
+    # Sections are independent: fetch them concurrently so a refresh
+    # costs the slowest section's time, not the sum of all of them.
+    # gather preserves the config's section order, and each section's
+    # items are produced by the same fetch as before.
+    names = list(sections)
+    results = await asyncio.gather(
+        *(_section(sections[name]) for name in names))
+    for name, items in zip(names, results):
+        out["sections"][name] = items
     if not any(out["sections"].values()):
         out["status"] = "empty"
         out["error"] = "News feeds unreachable right now."
