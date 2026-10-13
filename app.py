@@ -306,15 +306,21 @@ CREATE TABLE IF NOT EXISTS newsletter(
 
 
 async def _db():
-    db = await aiosqlite.connect(DB_PATH, timeout=30)
-    await db.execute("PRAGMA journal_mode=WAL")
-    return db
+    # SL5-1: do NOT await the connect here. aiosqlite's __await__ starts
+    # the connection's worker thread, and every caller uses
+    # `async with await _db()` — the context manager awaits the
+    # connection again, and a thread can only be started once, so the
+    # old shape died at startup with "threads can only be started once".
+    # Returning the unstarted connection lets __aenter__ start it once.
+    # WAL mode is asserted in init_db (it persists on the database file).
+    return aiosqlite.connect(DB_PATH, timeout=30)
 
 
 async def init_db():
     try:
         async with await _db() as db:
             await db.executescript(SCHEMA)
+            await db.execute("PRAGMA journal_mode=WAL")  # SL5-1: see _db()
             await db.commit()
     except sqlite3.DatabaseError:
         # SL4-1: a corrupt database must never brick startup — quarantine
@@ -362,6 +368,13 @@ def _real_ip(request: Request):
 def rate_limit(request: Request, max_hits: int = 20, window: int = 600):
     ip = _real_ip(request)
     now = time.time()
+    # SL5-7: prune IPs whose hits have all expired, so this table can't
+    # grow by one permanent entry per unique visitor on a long-lived
+    # server. Only swept once the table is actually large.
+    if len(_hits) > 4096:
+        for _k in [k for k, v in _hits.items()
+                   if not v or now - max(v) >= window]:
+            _hits.pop(_k, None)
     keep = [t for t in _hits[ip] if now - t < window]
     if len(keep) >= max_hits:
         # SL4-2: log rejections with real IP + path
@@ -462,6 +475,9 @@ async def flights_page(request: Request, q: str = ""):
         if not api_key:
             key_missing = True
         else:
+            # SL5-6: each lookup spends paid flight-API quota — cap
+            # per-IP lookups like the other public endpoints.
+            rate_limit(request)
             result, error = await feeds.lookup_flight(
                 q.strip(), api_key, config["feeds"]["request_timeout_seconds"])
     return templates.TemplateResponse(request, "flights.html", _ctx(
@@ -527,6 +543,14 @@ def _client_ip(request: Request):
     return request.client.host if request.client else ""
 
 
+def _s(body, key):
+    """SL5-3: a JSON field as a string. A non-string value (number, list,
+    object) becomes "" instead of crashing .strip()/slicing into a 500;
+    paired with an isinstance(body, dict) check in each handler."""
+    v = body.get(key)
+    return v if isinstance(v, str) else ""
+
+
 @app.post("/api/contact")
 async def api_contact(request: Request):
     rate_limit(request)
@@ -534,8 +558,10 @@ async def api_contact(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    name, email, message = (body.get("name") or "").strip(), (body.get("email") or "").strip(), \
-                          (body.get("message") or "").strip()
+    if not isinstance(body, dict):  # SL5-3
+        raise HTTPException(400, "Invalid JSON.")
+    name, email, message = _s(body, "name").strip(), _s(body, "email").strip(), \
+                          _s(body, "message").strip()
     if not name or not email or not message or "@" not in email:
         raise HTTPException(400, "Name, a valid email, and a message are required.")
     if len(message) > 5000:
@@ -543,7 +569,7 @@ async def api_contact(request: Request):
     async with await _db() as db:
         await db.execute(
             "INSERT INTO contacts(created_at,name,email,subject,message,ip) VALUES(?,?,?,?,?,?)",
-            (_utcnow(), name[:120], email[:160], (body.get("subject") or "")[:160],
+            (_utcnow(), name[:120], email[:160], _s(body, "subject")[:160],
              message, _client_ip(request)))
         await db.commit()
     log.info("contact submission from %s", email)
@@ -558,21 +584,23 @@ async def api_ticket(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    name, email, subject, message = ((body.get(k) or "").strip()
+    if not isinstance(body, dict):  # SL5-3
+        raise HTTPException(400, "Invalid JSON.")
+    name, email, subject, message = (_s(body, k).strip()
                                     for k in ("name", "email", "subject", "message"))
     if not name or not email or "@" not in email or not subject or not message:
         raise HTTPException(400, "Name, valid email, subject, and message are required.")
     if len(message) > 8000:
         raise HTTPException(400, "Message is too long (8000 chars max).")
-    prio = (body.get("priority") or "Normal").strip().capitalize()
+    prio = (_s(body, "priority") or "Normal").strip().capitalize()
     if prio not in ("Low", "Normal", "High"):
         prio = "Normal"  # public can never file Critical
     async with await _db() as db:
         cur = await db.execute(
             "INSERT INTO tickets(created_at,name,email,phone,category,priority,subject,message,ip)"
             " VALUES(?,?,?,?,?,?,?,?,?)",
-            (_utcnow(), name[:120], email[:160], (body.get("phone") or "")[:40],
-             (body.get("category") or "")[:80], prio, subject[:200], message,
+            (_utcnow(), name[:120], email[:160], _s(body, "phone")[:40],
+             _s(body, "category")[:80], prio, subject[:200], message,
              _client_ip(request)))
         await db.commit()
         tid = cur.lastrowid
@@ -587,14 +615,16 @@ async def api_newsletter(request: Request):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    email = (body.get("email") or "").strip()
+    if not isinstance(body, dict):  # SL5-3
+        raise HTTPException(400, "Invalid JSON.")
+    email = _s(body, "email").strip()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required.")
     async with await _db() as db:
         try:
             await db.execute(
                 "INSERT INTO newsletter(created_at,email,name,ip) VALUES(?,?,?,?)",
-                (_utcnow(), email[:160], (body.get("name") or "")[:120], _client_ip(request)))
+                (_utcnow(), email[:160], _s(body, "name")[:120], _client_ip(request)))
             await db.commit()
         except Exception:
             pass  # duplicate email — still report success (no enumeration)
@@ -605,6 +635,13 @@ async def api_newsletter(request: Request):
 @app.post("/api/briefing")
 async def api_briefing(request: Request):
     token = config.get("briefing_token") or ""
+    if not token and config.get("tunnel", {}).get("enabled"):
+        # SL5-5: no token configured + the public tunnel on = anyone on
+        # the internet could inject briefing content onto /news. Fail
+        # closed in exactly that configuration; the tokenless setup
+        # keeps working when the server is localhost-only (same trust
+        # level as the admin localhost bypass).
+        raise HTTPException(403, "Briefing token is not configured.")
     if token:
         # SL3-1: token is header-only now — ?token= in the query string is
         # no longer accepted (it leaks into logs, proxies, and history).
@@ -679,7 +716,14 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
     if rows:
         w = csv.DictWriter(buf, fieldnames=list(rows[0].keys()))
         w.writeheader()
-        w.writerows(rows)
+        # SL5-4: spreadsheet formula injection — a stored submission
+        # whose cell starts with =, +, -, @ (or tab/CR) is executed as a
+        # formula when the export is opened in Excel/Sheets. Prefix
+        # those cells with a quote so they stay inert text.
+        w.writerows({k: ("'" + v if isinstance(v, str)
+                          and v[:1] in ("=", "+", "-", "@", "\t", "\r")
+                          else v)
+                     for k, v in r.items()} for r in rows)
     return StreamingResponse(
         io.BytesIO(buf.getvalue().encode("utf-8")), media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sentinel-{type}.csv"})
@@ -692,12 +736,14 @@ async def admin_ticket_update(request: Request, ticket_id: int):
         body = await request.json()
     except Exception:
         raise HTTPException(400, "Invalid JSON.")
-    status = (body.get("status") or "").strip().lower()
+    if not isinstance(body, dict):  # SL5-3
+        raise HTTPException(400, "Invalid JSON.")
+    status = _s(body, "status").strip().lower()
     if status not in ("new", "open", "in_progress", "resolved", "closed"):
         raise HTTPException(400, "Invalid status.")
     async with await _db() as db:
         await db.execute("UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
-                         (status, (body.get("admin_notes") or "")[:2000], ticket_id))
+                         (status, _s(body, "admin_notes")[:2000], ticket_id))
         await db.commit()
     log.info("ticket #%s -> %s (admin)", ticket_id, status)
     return {"ok": True, "id": ticket_id, "status": status}
