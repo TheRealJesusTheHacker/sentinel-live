@@ -4,6 +4,7 @@ All functions are async, tolerate failures, and never invent data:
 on failure they return an error status the pages render honestly.
 """
 import asyncio
+import logging
 import re
 from collections import Counter, defaultdict
 from datetime import datetime, timezone
@@ -12,6 +13,9 @@ import feedparser
 import httpx
 
 UA = {"User-Agent": "SentinelLive/1.0 (Sentinel Safeguard LLC)"}
+# app.py configures this logger with the server.log file handler, so
+# feed problems land in the same log as everything else.
+log = logging.getLogger("sentinel-live")
 
 # ---------------------------------------------------------------- countries
 # Compact lat/lon table for the threat map (centroids, good enough for arcs).
@@ -226,8 +230,11 @@ async def fetch_threat(timeout=20, abuse_ch_key=""):
                 out["status"] = "error"
                 out["error"] = "Threat feed unavailable (" + "; ".join(errors) + ")"
     except Exception as e:  # honest failure state
+        # SL5-2: the detail goes to the log, not the public page —
+        # exception strings can carry request URLs and other internals.
+        log.warning("fetch_threat failed: %r", e)
         out["status"] = "error"
-        out["error"] = f"Threat feed unavailable ({type(e).__name__}): {e}"
+        out["error"] = f"Threat feed unavailable ({type(e).__name__})"
     return out
 
 
@@ -398,8 +405,17 @@ async def lookup_flight(number, api_key, timeout=20):
                                               "flight_iata": num}, timeout=timeout)
             r.raise_for_status()
             payload = r.json()
+    except httpx.HTTPStatusError as e:
+        # SL5-2: NEVER surface str(e) here — httpx includes the full
+        # request URL in it, and the API key travels in that URL's
+        # query string. The old message pasted the live key onto the
+        # public /flights page for anyone who triggered an error.
+        log.warning("flight lookup for %s: HTTP %s",
+                    num, e.response.status_code)
+        return None, f"Flight API request failed (HTTP {e.response.status_code})."
     except Exception as e:
-        return None, f"Flight API request failed ({type(e).__name__}): {e}"
+        log.warning("flight lookup for %s failed: %r", num, e)
+        return None, f"Flight API request failed ({type(e).__name__})."
     flights = (payload or {}).get("data") or []
     if not flights:
         err = (payload or {}).get("error", {})
