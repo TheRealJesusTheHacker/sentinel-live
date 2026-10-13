@@ -1,0 +1,32 @@
+# --- Runtime data: the server writes these beside the code. Never commit. ---
+data/
+logs/
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+
+# Local config with real keys (the tracked config.yaml is an empty template)
+config.local.yaml
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+.pytest_cache/
+
+# --- Build artifacts ---
+dist/
+build/
+
+# --- OS / editor junk ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
