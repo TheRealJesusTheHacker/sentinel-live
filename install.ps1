@@ -20,6 +20,18 @@ if (-not (Test-Path $exe)) {
     exit 1
 }
 
+# The tasks below run the exe as SYSTEM at every boot, so WHOEVER can
+# write to this folder controls a SYSTEM binary. If the install dir is
+# inside a user profile (Desktop/Downloads etc.), a standard-user
+# process can replace the exe and gain SYSTEM on the next boot. Warn
+# loudly; the safe home is an admin-protected folder (e.g. C:\SentinelLive
+# created by an administrator).
+if ($installDir -like "$env:USERPROFILE\*" -or $installDir -like "C:\Users\Public\*") {
+    Write-Host "WARNING: $installDir is inside a user-writable profile folder." -ForegroundColor Yellow
+    Write-Host "The startup task runs SentinelLive.exe as SYSTEM — anyone/anything that can" -ForegroundColor Yellow
+    Write-Host "overwrite that exe gets SYSTEM at boot. Prefer an admin-only folder like C:\SentinelLive." -ForegroundColor Yellow
+}
+
 # Read port/host from config.yaml (simple regex parse; defaults 127.0.0.1:8443)
 $srvHost = "127.0.0.1"; $srvPort = "8443"; $tunnelOn = $false
 $cfg = Join-Path $installDir "config.yaml"
