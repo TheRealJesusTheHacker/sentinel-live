@@ -4,6 +4,7 @@ All functions are async, tolerate failures, and never invent data:
 on failure they return an error status the pages render honestly.
 """
 import asyncio
+import ipaddress
 import logging
 import re
 from collections import Counter
@@ -176,8 +177,22 @@ async def fetch_threat(timeout=20, abuse_ch_key=""):
                 # BH2-5: tolerate malformed entries — one bad source
                 # (not an object, no ip) must not take the whole map
                 # down; the healthy entries still render.
+                # SL6-7: the ip string is interpolated into the DShield
+                # detail URL and the geolocation payload below, so
+                # require it to actually parse as an IP address — a
+                # compromised/mangled upstream entry must not get to
+                # reshape the request path ("../../", "?x=" etc.).
+                def _is_ip(v):
+                    if not isinstance(v, str):
+                        return False
+                    try:
+                        ipaddress.ip_address(v)
+                        return True
+                    except ValueError:
+                        return False
+
                 clean = [s for s in sources
-                         if isinstance(s, dict) and s.get("ip")]
+                         if isinstance(s, dict) and _is_ip(s.get("ip"))]
                 top = clean[:40]
                 details = await asyncio.gather(*(_detail(s["ip"]) for s in top))
                 geo = await _geolocate_ips(client, [s["ip"] for s in clean[:60]], timeout)
