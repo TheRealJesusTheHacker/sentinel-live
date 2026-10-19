@@ -7,6 +7,7 @@ Serves:
   * 4 live pages: /threat-map  /geopolitical  /flights  /news
   * website backend APIs: contact form, Get Help tickets, newsletter signup
   * admin API + page (localhost-only, or X-Admin-Key)
+  * optional HackProof payments pass-through (config-gated, default off)
 All persistent storage is an embedded SQLite file next to the exe.
 Logs go to ./logs/server.log (there is no console in the .exe build).
 """
@@ -23,12 +24,15 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from urllib.parse import quote
 
 import aiosqlite
+import httpx
 import yaml
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.responses import (HTMLResponse, JSONResponse, Response,
+                               StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -73,6 +77,11 @@ DEFAULT_CONFIG = {
                "args": "tunnel --url http://127.0.0.1:8443"},
     "briefing_token": "",
     "admin_key": "",
+    # Optional HackProof payments pass-through (default OFF): when enabled,
+    # the three public payments routes are proxied to the payments service
+    # running on this same machine (see the proxy section below).
+    "hackproof_payments": {"enabled": False,
+                           "upstream": "http://127.0.0.1:8787"},
     # SL6-1: default is NO cross-origin access. The old default of ["*"]
     # combined with the localhost admin bypass let any website the owner
     # visited on aroura read /api/admin/* responses out of the local
@@ -195,6 +204,23 @@ def _validate_config_schema():
                 log.warning("config: feeds.%s invalid (%r); using default %r",
                             _key, _v, DEFAULT_CONFIG["feeds"][_key])
                 fcfg[_key] = DEFAULT_CONFIG["feeds"][_key]
+    hpcfg = config.get("hackproof_payments")
+    if isinstance(hpcfg, dict):
+        # Only a literal true enables the pass-through — a truthy string
+        # from a hand-edited config must not silently open the routes.
+        if not isinstance(hpcfg.get("enabled"), bool):
+            log.warning("config: hackproof_payments.enabled invalid (%r); "
+                        "using default %r",
+                        hpcfg.get("enabled"),
+                        DEFAULT_CONFIG["hackproof_payments"]["enabled"])
+            hpcfg["enabled"] = DEFAULT_CONFIG["hackproof_payments"]["enabled"]
+        _up = hpcfg.get("upstream")
+        if not isinstance(_up, str) or \
+                not _up.startswith(("http://", "https://")):
+            log.warning("config: hackproof_payments.upstream invalid (%r); "
+                        "using default %r", _up,
+                        DEFAULT_CONFIG["hackproof_payments"]["upstream"])
+            hpcfg["upstream"] = DEFAULT_CONFIG["hackproof_payments"]["upstream"]
 
 
 _validate_config_schema()
@@ -843,6 +869,79 @@ async def admin_ticket_update(request: Request, ticket_id: int):
         raise HTTPException(404, "Ticket not found.")
     log.info("ticket #%s -> %s (admin)", ticket_id, status)
     return {"ok": True, "id": ticket_id, "status": status}
+
+
+# ------------------------------------------------------- HackProof payments
+# Optional pass-through to the HackProof payments service (payments/** in
+# the HackProof repo), which runs on this same machine bound to loopback.
+# Config: hackproof_payments.enabled (default OFF — the routes below do
+# not exist at all while it is off). When enabled, Sentinel Live fronts
+# the service so one server faces the world and the payments service
+# never needs a port of its own exposed.
+#
+# ONLY the three public payments routes are proxied. /api/admin/* is
+# NEVER proxied: the payments review queue stays reachable only directly
+# on loopback, behind its own admin token.
+_hp_cfg = config.get("hackproof_payments") or {}
+HP_PAYMENTS_ENABLED = bool(_hp_cfg.get("enabled"))
+HP_PAYMENTS_UPSTREAM = str(
+    _hp_cfg.get("upstream") or "http://127.0.0.1:8787").rstrip("/")
+
+_payments_client = None
+
+
+def _get_payments_client():
+    global _payments_client
+    if _payments_client is None:
+        # Order creation asks the upstream to lock a live BTC price and
+        # certificate issuance sends email, so reads may take a while;
+        # the connect timeout stays short so a dead upstream fails fast.
+        _payments_client = httpx.AsyncClient(
+            timeout=httpx.Timeout(65.0, connect=5.0))
+    return _payments_client
+
+
+async def _proxy_payments(request: Request, upstream_path: str):
+    """Forward one request to the payments service and return its reply
+    untouched: same status, same body bytes. The certificate flow depends
+    on the exact 200/201/202/400 semantics, so nothing is re-shaped."""
+    headers = {}
+    for _h in ("content-type", "accept"):
+        _v = request.headers.get(_h)
+        if _v:
+            headers[_h] = _v
+    try:
+        resp = await _get_payments_client().request(
+            request.method, HP_PAYMENTS_UPSTREAM + upstream_path,
+            content=await request.body(), headers=headers)
+    except httpx.HTTPError:
+        log.warning("hackproof payments upstream unreachable: %s %s",
+                    request.method, upstream_path)
+        raise HTTPException(
+            502, "The HackProof payment service is unavailable right now "
+                 "— please try again in a few minutes.")
+    return Response(
+        content=resp.content, status_code=resp.status_code,
+        headers={"Content-Type": resp.headers.get("content-type",
+                                                  "application/json")})
+
+
+if HP_PAYMENTS_ENABLED:
+    @app.post("/api/orders")
+    async def hp_create_order(request: Request):
+        return await _proxy_payments(request, "/api/orders")
+
+    @app.get("/api/orders/{order_id}")
+    async def hp_order_status(request: Request, order_id: str):
+        return await _proxy_payments(
+            request, "/api/orders/" + quote(order_id, safe=""))
+
+    @app.post("/api/certificates")
+    async def hp_submit_certificate(request: Request):
+        return await _proxy_payments(request, "/api/certificates")
+
+    log.info("HackProof payments pass-through enabled (upstream %s)",
+             HP_PAYMENTS_UPSTREAM)
 
 
 # ------------------------------------------------------------------ optional static site
