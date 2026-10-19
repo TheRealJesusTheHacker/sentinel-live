@@ -73,7 +73,14 @@ DEFAULT_CONFIG = {
                "args": "tunnel --url http://127.0.0.1:8443"},
     "briefing_token": "",
     "admin_key": "",
-    "cors_origins": ["*"],
+    # SL6-1: default is NO cross-origin access. The old default of ["*"]
+    # combined with the localhost admin bypass let any website the owner
+    # visited on aroura read /api/admin/* responses out of the local
+    # server (the request genuinely comes from 127.0.0.1, and "*" let the
+    # attacker's page read the reply). Same-origin pages served by this
+    # server never need CORS; an externally hosted frontend must be
+    # listed explicitly in config.yaml (cors_origins).
+    "cors_origins": [],
     "rss": {
         "geopolitical": [
             "https://www.aljazeera.com/xml/rss/all.xml",
@@ -221,6 +228,23 @@ class _BodySizeLimitMiddleware:
                     "more_body": False})
 
     async def __call__(self, scope, receive, send):
+        if scope["type"] == "http":
+            # SL6-6: nosniff on every response — cheap insurance against
+            # MIME-sniffing a stored/uploaded body into active content.
+            # (Deliberately NOT a full CSP or frame policy here: the
+            # pages load Leaflet + map tiles from CDNs and the owner may
+            # embed the live pages in the main site; those policies
+            # need their own deliberate pass, not a drive-by header.)
+            _orig_send = send
+
+            async def send(message):
+                if message["type"] == "http.response.start":
+                    hdrs = [(k, v) for k, v in message.get("headers", [])
+                            if k.lower() != b"x-content-type-options"]
+                    hdrs.append((b"x-content-type-options", b"nosniff"))
+                    message = dict(message, headers=hdrs)
+                await _orig_send(message)
+
         if scope["type"] != "http" or scope.get("method") not in ("POST", "PATCH", "PUT"):
             await self.app(scope, receive, send)
             return
@@ -359,6 +383,7 @@ def _utcnow():
 
 # ------------------------------------------------------------------ guards
 _hits = defaultdict(list)
+_admin_fails = defaultdict(list)
 
 
 def _real_ip(request: Request):
@@ -401,8 +426,28 @@ def require_admin(request: Request):
         return True
     key = request.headers.get("X-Admin-Key", "")
     expected = config.get("admin_key") or ""
-    if expected and key and hmac.compare_digest(key, expected):
+    ok = False
+    if expected and key:
+        # SL6-2: compare_digest raises TypeError on non-ASCII str input
+        # (a latin-1-decoded header byte >= 0x80) — that escaped as a
+        # 500. The briefing-token check already guards this; mirror it.
+        try:
+            ok = hmac.compare_digest(key, expected)
+        except TypeError:
+            ok = False
+    if ok:
         return True
+    # SL6-3: throttle FAILED admin attempts per IP. Successful admin
+    # use is never counted (the console legitimately makes many calls);
+    # guessing the key is capped at 20 failures per 10 minutes per IP.
+    ip = _real_ip(request)
+    now = time.time()
+    fails = [t for t in _admin_fails[ip] if now - t < 600]
+    fails.append(now)
+    _admin_fails[ip] = fails
+    if len(fails) > 20:
+        log.warning("admin 429 throttled: ip=%s path=%s", ip, request.url.path)
+        raise HTTPException(429, "Too many failed admin attempts.")
     # SL4-2: log denied admin attempts with real IP + path
     log.warning("admin 403 denied: ip=%s path=%s", _real_ip(request),
                 request.url.path)
@@ -427,7 +472,16 @@ async def _refresh_loop(name, minutes, coro, *args):
 def _load_briefing():
     try:
         if BRIEFING_PATH.exists():
-            store["briefing"] = json.loads(BRIEFING_PATH.read_text(encoding="utf-8"))
+            data = json.loads(BRIEFING_PATH.read_text(encoding="utf-8"))
+            # SL6-4: only a JSON object is a briefing. A hand-edited or
+            # truncated file holding a list/scalar used to be stored
+            # as-is and then 500'd /news (no .sections on a list).
+            # Ingest already enforces this shape; enforce it on load.
+            if not isinstance(data, dict):
+                log.warning("briefing file is %s, not an object; ignoring it",
+                            type(data).__name__)
+                return
+            store["briefing"] = data
             log.info("loaded briefing for %s", store["briefing"].get("date"))
     except Exception as e:
         log.warning("briefing load failed: %s", e)
@@ -649,6 +703,9 @@ async def api_newsletter(request: Request):
 # ------------------------------------------------------------------ briefing ingest
 @app.post("/api/briefing")
 async def api_briefing(request: Request):
+    # SL6-3: a daily briefing is one post a day; the shared form limiter
+    # (20/10min/IP) still caps token guessing and write spam.
+    rate_limit(request)
     token = config.get("briefing_token") or ""
     if not token and config.get("tunnel", {}).get("enabled"):
         # SL5-5: no token configured + the public tunnel on = anyone on
@@ -751,11 +808,17 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
         # whose cell starts with =, +, -, @ (or tab/CR) is executed as a
         # formula when the export is opened in Excel/Sheets. Prefix
         # those cells with a quote so they stay inert text.
-        # (Row lists in `fields` order: the same cells DictWriter wrote,
-        # without building a throwaway dict per row.)
-        w.writerows([("'" + r[k] if isinstance(r[k], str)
-                      and r[k][:1] in ("=", "+", "-", "@", "\t", "\r")
-                      else r[k]) for k in fields] for r in rows)
+        # SL6-5: also catch the formula char hidden behind leading
+        # spaces/tabs ("  =..."), which Sheets/Excel still evaluate.
+        def _csv_safe(v):
+            if not isinstance(v, str) or not v:
+                return v
+            if v[:1] in ("=", "+", "-", "@", "\t", "\r") or \
+                    v.lstrip(" \t")[:1] in ("=", "+", "-", "@"):
+                return "'" + v
+            return v
+
+        w.writerows([_csv_safe(r[k]) for k in fields] for r in rows)
     return StreamingResponse(
         io.BytesIO(buf.getvalue().encode("utf-8")), media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename=sentinel-{type}.csv"})
