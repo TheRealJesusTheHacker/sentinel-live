@@ -2,7 +2,7 @@
 REM Build SentinelLive.exe locally on Windows (requires Python 3.11+).
 REM The GitHub Actions workflow does this automatically on every release.
 cd /d %~dp0
-py -m pip install --quiet -r requirements.txt pyinstaller
+py -m pip install --quiet -r requirements.txt pyinstaller==6.22.3
 py -m PyInstaller --noconfirm --onefile --noconsole --name SentinelLive ^
   --add-data "templates;templates" ^
   --add-data "static;static" ^
