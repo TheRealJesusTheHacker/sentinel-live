@@ -51,6 +51,20 @@ admin_key: ""
 # visits read admin data out of the local server.
 cors_origins: []
 
+# HackProof payments pass-through (optional). Default OFF: while disabled,
+# nothing changes and the payments routes do not exist on this server.
+# When enabled, Sentinel Live forwards the three public HackProof payments
+# routes (POST /api/orders, GET /api/orders/<id>, POST /api/certificates)
+# to the payments service running on THIS machine, so only one server
+# faces the world and the payments service keeps its loopback-only bind.
+# The payments admin/review endpoints are never forwarded — they stay
+# reachable only directly on the machine itself. If your buy page is
+# hosted on a different origin, also add that exact origin to
+# cors_origins above (never "*").
+hackproof_payments:
+  enabled: false
+  upstream: "http://127.0.0.1:8787"
+
 # RSS sources. Add/remove freely; failures are tolerated per-feed.
 rss:
   geopolitical:
