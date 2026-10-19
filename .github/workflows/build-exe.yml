@@ -30,10 +30,16 @@ jobs:
             --hidden-import aiosqlite `
             app.py
 
+      - name: Generate checksums
+        shell: pwsh
+        run: |
+          $hash = (Get-FileHash "dist/SentinelLive.exe" -Algorithm SHA256).Hash.ToLower()
+          "$hash  SentinelLive.exe" | Out-File -Encoding ascii "dist/SHA256SUMS.txt"
+
       - name: Attach exe to release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if (!(Test-Path "dist/SentinelLive.exe")) { Write-Error "exe not found"; exit 1 }
-          gh release upload "${{ github.ref_name }}" dist/SentinelLive.exe --clobber
+          gh release upload "${{ github.ref_name }}" dist/SentinelLive.exe dist/SHA256SUMS.txt --clobber
