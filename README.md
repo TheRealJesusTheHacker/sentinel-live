@@ -111,6 +111,43 @@ Your `data/` and `logs/` folders are kept.
   admin bypass, `*` would let any website visited on aroura read admin
   data out of the local server.
 
+## HackProof payments pass-through (optional, off by default)
+
+Sentinel Live can also front the **HackProof payments service** (the
+`payments/` program in the HackProof repo — automated Bitcoin checkout
+and certificate delivery), so one server faces the world and the
+payments service never needs a public port of its own. While it is off
+(the default), nothing changes: the payments routes do not exist on
+this server.
+
+To turn it on:
+
+1. **Set the payments service up on the same machine first**, following
+   its own README ("Host setup" in the HackProof repo's
+   `payments/README.md`): the seller key store must exist
+   (`~/.hackproof`), copy `payments/config.example.json` to
+   `~/.hackproof-payments/config.json` with your SMTP settings and a
+   long random admin token (keep that file private), run its `--check`
+   and `--selftest`, and start it at boot next to Sentinel Live (its
+   README has the Task Scheduler recipe). It listens only on
+   `127.0.0.1:8787` — leave it that way.
+2. **Flip one switch** in this server's `config.yaml`:
+   `hackproof_payments.enabled: true` (the `upstream` next to it is
+   already the right address). If your buy page is hosted on a
+   different origin, also add that exact origin to `cors_origins` —
+   never `*`.
+3. **Restart Sentinel Live.** These three routes now work at this
+   server's address, answered by the payments service:
+   `POST /api/orders`, `GET /api/orders/<id>`, `POST /api/certificates`.
+4. **Point the storefront at this server**: the site's
+   `PAYMENTS_API_BASE` and the app's `HACKPROOF_SERVICE_BASE_URL` both
+   become this server's public base URL.
+
+One safety line that does not move: the payments **admin/review
+endpoints are never forwarded**. The review queue stays reachable only
+directly on the machine itself, exactly as the payments service
+intends.
+
 ## Daily briefing ingest
 
 ```powershell
