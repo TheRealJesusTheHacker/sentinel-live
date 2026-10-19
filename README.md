@@ -74,7 +74,12 @@ Your `data/` and `logs/` folders are kept.
   `X-Admin-Key` header. Empty = localhost only.
 * `briefing_token` — shared secret for `POST /api/briefing`.
 * `rss.*` — feed URLs per section; failures are tolerated per-feed.
-* `cors_origins` — restrict to your public domain(s) in production.
+* `cors_origins` — cross-origin allowlist, **empty by default** (pages
+  served by this server are same-origin and need no CORS). Only set it
+  when a frontend hosted on another origin must fetch these endpoints,
+  and only to that exact origin — never `*`: combined with the localhost
+  admin bypass, `*` would let any website visited on aroura read admin
+  data out of the local server.
 
 ## Daily briefing ingest
 
