@@ -17,6 +17,7 @@ import csv
 import io
 import json
 import logging
+import re
 import sqlite3
 import sys
 import time
@@ -24,7 +25,7 @@ from collections import defaultdict
 from datetime import datetime, timezone
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 import aiosqlite
 import httpx
@@ -215,12 +216,52 @@ def _validate_config_schema():
                         DEFAULT_CONFIG["hackproof_payments"]["enabled"])
             hpcfg["enabled"] = DEFAULT_CONFIG["hackproof_payments"]["enabled"]
         _up = hpcfg.get("upstream")
-        if not isinstance(_up, str) or \
-                not _up.startswith(("http://", "https://")):
+        # BH2-10: the pass-through is defined as fronting a service on
+        # THIS machine — so the upstream must be a bare loopback origin:
+        # http(s)://127.0.0.1 | ::1 | localhost with an optional port,
+        # and nothing else. The old check (any string starting with
+        # http://) accepted http://169.254.169.254/..., arbitrary remote
+        # hosts, userinfo that silently retargets the host
+        # (http://127.0.0.1:8787@evil.example), and path prefixes that
+        # reshape every proxied route — with request bodies forwarded
+        # to unauthenticated public callers, a non-loopback upstream
+        # turns this server into an SSRF relay for those routes.
+        _up_ok = False
+        if isinstance(_up, str):
+            try:
+                _p = urlparse(_up)
+                _up_ok = (
+                    _p.scheme in ("http", "https")
+                    and (_p.hostname or "") in ("127.0.0.1", "::1",
+                                                 "localhost")
+                    and _p.username is None and _p.password is None
+                    and _p.path in ("", "/")
+                    and not _p.query and not _p.fragment
+                    and (_p.port is None or 0 < _p.port < 65536))
+            except ValueError:
+                _up_ok = False
+        if not _up_ok:
             log.warning("config: hackproof_payments.upstream invalid (%r); "
                         "using default %r", _up,
                         DEFAULT_CONFIG["hackproof_payments"]["upstream"])
             hpcfg["upstream"] = DEFAULT_CONFIG["hackproof_payments"]["upstream"]
+    # BH2-12: CORS lockdown regression guard. Starlette treats the
+    # string "*" as a wildcard allowlist (`"*" in allow_origins` is a
+    # substring check on a str), so a hand-edited `cors_origins: "*"`
+    # — or any non-list value — silently reopened cross-origin access
+    # (the SL6-1 incident shape). Only a list of explicit origin
+    # strings is honored, and a "*" entry inside a list is dropped:
+    # wildcard CORS is never valid for this server (config docs and
+    # README both say so) because of the localhost admin bypass.
+    _cors = config.get("cors_origins")
+    if not isinstance(_cors, list) or \
+            any(not isinstance(_o, str) for _o in _cors):
+        log.warning("config: cors_origins invalid (%r); using []", _cors)
+        config["cors_origins"] = []
+    elif "*" in _cors:
+        log.warning("config: cors_origins contains '*'; dropping it "
+                    "(wildcard CORS is never allowed on this server)")
+        config["cors_origins"] = [_o for _o in _cors if _o != "*"]
 
 
 _validate_config_schema()
@@ -468,6 +509,12 @@ def require_admin(request: Request):
     # guessing the key is capped at 20 failures per 10 minutes per IP.
     ip = _real_ip(request)
     now = time.time()
+    # BH2-15: same unbounded-growth prune as _hits (SL5-7) — this table
+    # otherwise keeps one entry per IP that ever failed an admin check.
+    if len(_admin_fails) > 4096:
+        for _k in [k for k, v in _admin_fails.items()
+                   if not v or now - max(v) >= 600]:
+            _admin_fails.pop(_k, None)
     fails = [t for t in _admin_fails[ip] if now - t < 600]
     fails.append(now)
     _admin_fails[ip] = fails
@@ -718,11 +765,13 @@ async def api_newsletter(request: Request):
                 "INSERT INTO newsletter(created_at,email,name,ip) VALUES(?,?,?,?)",
                 (_utcnow(), email[:160], _s(body, "name")[:120], _client_ip(request)))
             await db.commit()
-        except aiosqlite.IntegrityError:
+        except aiosqlite.IntegrityError as e:
             # duplicate email — still report success (no enumeration).
-            # BH2-7: only the UNIQUE violation is swallowed; any other
-            # DB failure must surface as an error, not a fake success.
-            pass
+            # BH2-7/BH2-13: only the UNIQUE violation is swallowed;
+            # any other integrity failure must surface as an error,
+            # not a fake success (the blanket except used to hide it).
+            if "UNIQUE constraint failed" not in str(e):
+                raise
     return {"ok": True}
 
 
@@ -839,8 +888,11 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
         def _csv_safe(v):
             if not isinstance(v, str) or not v:
                 return v
-            if v[:1] in ("=", "+", "-", "@", "\t", "\r") or \
-                    v.lstrip(" \t")[:1] in ("=", "+", "-", "@"):
+            # BH2-14: a leading newline hid the formula char from both
+            # checks ("<LF>=..." with no space/tab to strip) — include
+            # \n in the first-char set and in the stripped prefix.
+            if v[:1] in ("=", "+", "-", "@", "\t", "\r", "\n") or \
+                    v.lstrip(" \t\r\n")[:1] in ("=", "+", "-", "@"):
                 return "'" + v
             return v
 
@@ -889,6 +941,44 @@ HP_PAYMENTS_UPSTREAM = str(
 
 _payments_client = None
 
+# BH2-11: cap on the upstream reply body. Payments replies are small
+# JSON documents; the old code buffered resp.content with no limit, so
+# a hung/buggy/compromised upstream could OOM this server with one
+# endless response. Anything past the cap is a clean 502, same shape
+# as an unreachable upstream.
+HP_PROXY_MAX_RESPONSE_BYTES = 5 * 1024 * 1024
+
+_hp_hits = defaultdict(list)
+
+
+def _hp_rate_limit(request: Request, category: str, max_hits: int):
+    """BH2-8: throttle for the proxied routes, with its OWN buckets.
+
+    The three routes shipped with no throttling at all: order creation
+    makes the upstream lock BTC prices and store orders, certificate
+    submission can trigger email, and order-status reads enumerate
+    payment state (a paid reply carries the license key). This cannot
+    share rate_limit()'s per-IP bucket, though: a buyer legitimately
+    polls order status for minutes, and in a shared bucket those polls
+    would eat the small POST allowance and then 429 the certificate
+    submission the whole flow exists for. Buckets are per category.
+    """
+    ip = _real_ip(request)
+    now = time.time()
+    if len(_hp_hits) > 4096:
+        for _k in [k for k, v in _hp_hits.items()
+                   if not v or now - max(v) >= 600]:
+            _hp_hits.pop(_k, None)
+    key = (category, ip)
+    keep = [t for t in _hp_hits[key] if now - t < 600]
+    if len(keep) >= max_hits:
+        log.warning("hackproof proxy rate-limit 429: ip=%s route=%s",
+                    ip, category)
+        raise HTTPException(429, "Too many requests — please slow down "
+                                 "and retry.")
+    keep.append(now)
+    _hp_hits[key] = keep
+
 
 def _get_payments_client():
     global _payments_client
@@ -904,40 +994,76 @@ def _get_payments_client():
 async def _proxy_payments(request: Request, upstream_path: str):
     """Forward one request to the payments service and return its reply
     untouched: same status, same body bytes. The certificate flow depends
-    on the exact 200/201/202/400 semantics, so nothing is re-shaped."""
+    on the exact 200/201/202/400 semantics, so nothing is re-shaped.
+
+    Only Content-Type/Accept are forwarded (BH2 sweep: the admin key,
+    cookies and any Authorization header a client sends this server
+    must never leak upstream), and only Content-Type is returned, so
+    no hop-by-hop or upstream session headers pass through either.
+    The reply is streamed under HP_PROXY_MAX_RESPONSE_BYTES (BH2-11).
+    """
     headers = {}
     for _h in ("content-type", "accept"):
         _v = request.headers.get(_h)
         if _v:
             headers[_h] = _v
     try:
-        resp = await _get_payments_client().request(
-            request.method, HP_PAYMENTS_UPSTREAM + upstream_path,
-            content=await request.body(), headers=headers)
+        async with _get_payments_client().stream(
+                request.method, HP_PAYMENTS_UPSTREAM + upstream_path,
+                content=await request.body(), headers=headers) as resp:
+            chunks, total = [], 0
+            async for chunk in resp.aiter_bytes():
+                total += len(chunk)
+                if total > HP_PROXY_MAX_RESPONSE_BYTES:
+                    log.warning("hackproof payments upstream response "
+                                "too large: %s %s", request.method,
+                                upstream_path)
+                    raise HTTPException(
+                        502, "The HackProof payment service returned "
+                             "an oversized response — please try again "
+                             "later.")
+                chunks.append(chunk)
+            status = resp.status_code
+            ctype = resp.headers.get("content-type", "application/json")
     except httpx.HTTPError:
         log.warning("hackproof payments upstream unreachable: %s %s",
                     request.method, upstream_path)
         raise HTTPException(
             502, "The HackProof payment service is unavailable right now "
                  "— please try again in a few minutes.")
-    return Response(
-        content=resp.content, status_code=resp.status_code,
-        headers={"Content-Type": resp.headers.get("content-type",
-                                                  "application/json")})
+    return Response(content=b"".join(chunks), status_code=status,
+                    headers={"Content-Type": ctype})
 
 
 if HP_PAYMENTS_ENABLED:
     @app.post("/api/orders")
     async def hp_create_order(request: Request):
+        _hp_rate_limit(request, "orders-create", 10)
         return await _proxy_payments(request, "/api/orders")
 
     @app.get("/api/orders/{order_id}")
     async def hp_order_status(request: Request, order_id: str):
+        # Generous cap: a checkout page polls this while a BTC payment
+        # confirms; the cap's job is stopping id enumeration/abuse,
+        # not breaking a waiting buyer (see _hp_rate_limit).
+        _hp_rate_limit(request, "order-status", 300)
+        # BH2-9: order ids are machine-issued tokens. Anything outside
+        # a plain token charset is rejected here instead of being
+        # quoted and forwarded: quoting alone left ".." to be
+        # normalized by the HTTP client into a different upstream path
+        # and left %2F-style smuggling to whatever decoding the
+        # upstream happens to do — either could reshape the fixed
+        # /api/orders/{id} path toward routes that must never be
+        # proxied (e.g. the payments service's /api/admin/*).
+        if ".." in order_id or \
+                not re.fullmatch(r"[A-Za-z0-9._-]+", order_id):
+            raise HTTPException(400, "Invalid order id.")
         return await _proxy_payments(
             request, "/api/orders/" + quote(order_id, safe=""))
 
     @app.post("/api/certificates")
     async def hp_submit_certificate(request: Request):
+        _hp_rate_limit(request, "certificates", 10)
         return await _proxy_payments(request, "/api/certificates")
 
     log.info("HackProof payments pass-through enabled (upstream %s)",
