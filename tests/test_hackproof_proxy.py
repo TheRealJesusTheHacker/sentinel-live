@@ -63,6 +63,7 @@ class Stub:
     def __init__(self):
         self.admin_hits = []
         self.received = []
+        self.received_headers = []
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         path = request.url.path
@@ -71,6 +72,7 @@ class Stub:
             return httpx.Response(200, content=ADMIN_BODY,
                                   headers={"Content-Type": "application/json"})
         self.received.append((request.method, path, request.content))
+        self.received_headers.append(dict(request.headers))
         if path == "/api/orders" and request.method == "POST":
             return httpx.Response(201, content=ORDER_BODY,
                                   headers={"Content-Type": "application/json"})
@@ -213,3 +215,133 @@ def test_upstream_down_is_clean_502(down_app):
     assert "detail" in body
     assert "Traceback" not in resp.text
     assert "unavailable" in body["detail"]
+
+
+# ------------------------------------------------- BH2 sweep additions
+def test_proxy_does_not_leak_sensitive_headers_upstream(enabled):
+    """BH2: admin key / cookies / auth sent to THIS server must never
+    be forwarded to the payments upstream."""
+    mod, stub = enabled
+    client = TestClient(mod.app, raise_server_exceptions=False)
+    resp = client.post("/api/orders", json={"email": "buyer@example.com"},
+                       headers={"X-Admin-Key": "topsecret",
+                                "Cookie": "session=abc123",
+                                "Authorization": "Bearer xyz"})
+    assert resp.status_code == 201
+    hdrs = stub.received_headers[-1]
+    assert "x-admin-key" not in hdrs
+    assert "cookie" not in hdrs
+    assert "authorization" not in hdrs
+    assert "topsecret" not in str(hdrs.values())
+    assert "abc123" not in str(hdrs.values())
+
+
+def test_order_id_traversal_is_rejected(enabled):
+    """BH2-9: ids outside the token charset never reach the upstream,
+    so the fixed /api/orders/{id} path can't be reshaped toward
+    /api/admin/* by dot segments or encoded slashes."""
+    mod, stub = enabled
+    client = TestClient(mod.app, raise_server_exceptions=False)
+    before = len(stub.received)
+    for raw in ("ord_1%3Fadmin%3D1", "..%2F..%2Fapi%2Fadmin%2Freview",
+                "%2e%2e%2Fapi%2Fadmin%2Freview", "ord%201"):
+        resp = client.get(f"/api/orders/{raw}")
+        assert resp.status_code in (400, 404), (raw, resp.status_code)
+    assert len(stub.received) == before
+    assert stub.admin_hits == []
+
+
+@pytest.fixture(scope="module")
+def ratelimit_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-ratelimit")
+    mod = _load_app(tmp, "sl_app_ratelimit",
+                    "hackproof_payments:\n  enabled: true\n"
+                    "  upstream: \"http://127.0.0.1:9\"\n")
+    stub = Stub()
+    mod._get_payments_client = stub.client
+    return mod
+
+
+def test_proxy_posts_are_rate_limited(ratelimit_app):
+    """BH2-8: repeated order creation is capped (429), not unbounded."""
+    client = TestClient(ratelimit_app.app, raise_server_exceptions=False)
+    codes = [client.post("/api/orders",
+                         json={"email": "a@b.co"}).status_code
+             for _ in range(11)]
+    assert codes[:10] == [201] * 10
+    assert codes[10] == 429
+
+
+@pytest.fixture(scope="module")
+def big_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-big")
+    mod = _load_app(tmp, "sl_app_big",
+                    "hackproof_payments:\n  enabled: true\n"
+                    "  upstream: \"http://127.0.0.1:9\"\n")
+
+    def big_handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200, content=b"x" * (mod.HP_PROXY_MAX_RESPONSE_BYTES + 1),
+            headers={"Content-Type": "application/json"})
+
+    mod._get_payments_client = lambda: httpx.AsyncClient(
+        transport=httpx.MockTransport(big_handler))
+    return mod
+
+
+def test_oversized_upstream_response_is_clean_502(big_app):
+    """BH2-11: an upstream reply past the size cap is a clean 502 in
+    the app's error shape, not an unbounded buffer."""
+    client = TestClient(big_app.app, raise_server_exceptions=False)
+    resp = client.get("/api/orders/ord_1")
+    assert resp.status_code == 502
+    assert "detail" in resp.json()
+    assert len(resp.content) < big_app.HP_PROXY_MAX_RESPONSE_BYTES
+
+
+@pytest.fixture(scope="module")
+def bad_upstream_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-badupstream")
+    return _load_app(tmp, "sl_app_badupstream",
+                     "hackproof_payments:\n  enabled: true\n"
+                     "  upstream: \"http://127.0.0.1:8787@evil.example\"\n")
+
+
+def test_non_loopback_upstream_falls_back_to_default(bad_upstream_app):
+    """BH2-10: userinfo/remote upstreams are rejected at config load;
+    only a bare loopback origin is honored."""
+    assert bad_upstream_app.HP_PAYMENTS_UPSTREAM == "http://127.0.0.1:8787"
+
+
+@pytest.fixture(scope="module")
+def cors_star_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-corsstar")
+    return _load_app(tmp, "sl_app_corsstar", 'cors_origins: "*"\n')
+
+
+def test_cors_string_star_is_not_a_wildcard(cors_star_app):
+    """BH2-12: `cors_origins: "*"` as a bare YAML string must NOT turn
+    into ACAO:* (Starlette would treat the string as a wildcard)."""
+    assert cors_star_app.config["cors_origins"] == []
+    client = TestClient(cors_star_app.app, raise_server_exceptions=False)
+    resp = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert resp.status_code == 200
+    assert "access-control-allow-origin" not in resp.headers
+
+
+@pytest.fixture(scope="module")
+def cors_list_star_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-corsliststar")
+    return _load_app(tmp, "sl_app_corsliststar",
+                     'cors_origins: ["*", "https://ok.example"]\n')
+
+
+def test_cors_list_star_entry_is_dropped(cors_list_star_app):
+    """BH2-12: a "*" entry inside the list is dropped; explicit
+    origins keep working."""
+    assert cors_list_star_app.config["cors_origins"] == ["https://ok.example"]
+    client = TestClient(cors_list_star_app.app, raise_server_exceptions=False)
+    evil = client.get("/health", headers={"Origin": "https://evil.example"})
+    assert "access-control-allow-origin" not in evil.headers
+    ok = client.get("/health", headers={"Origin": "https://ok.example"})
+    assert ok.headers.get("access-control-allow-origin") == "https://ok.example"
