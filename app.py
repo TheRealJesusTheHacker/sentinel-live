@@ -245,6 +245,47 @@ def _validate_config_schema():
                         "using default %r", _up,
                         DEFAULT_CONFIG["hackproof_payments"]["upstream"])
             hpcfg["upstream"] = DEFAULT_CONFIG["hackproof_payments"]["upstream"]
+    # S3-1: tunnel.enabled drives three trust decisions with plain
+    # truthiness — _real_ip() trusting CF-Connecting-IP, the admin
+    # localhost bypass switching off, and the briefing endpoint
+    # failing closed without a token. A hand-edited `enabled: "false"`
+    # (a quoted string) is truthy, so the server behaved as if the
+    # tunnel were ON while the operator believed it OFF: localhost
+    # admin locked out, and any direct caller could spoof
+    # CF-Connecting-IP to pick their own rate-limit bucket. Same
+    # type-confusion family as BH2-12 / the hackproof_payments.enabled
+    # check above: only a literal bool is honored.
+    tcfg = config.get("tunnel")
+    if isinstance(tcfg, dict):
+        if not isinstance(tcfg.get("enabled"), bool):
+            log.warning("config: tunnel.enabled invalid (%r); "
+                        "using default %r",
+                        tcfg.get("enabled"),
+                        DEFAULT_CONFIG["tunnel"]["enabled"])
+            tcfg["enabled"] = DEFAULT_CONFIG["tunnel"]["enabled"]
+    # S3-2: the remaining scalar keys are consumed with str-only
+    # operations (.strip() on the flight key, header values, token
+    # comparisons). A non-string value from a hand-edited config —
+    # e.g. `api_key: 12345` — crashed the public /flights page with a
+    # 500 on every lookup. Normalize them all to their (empty)
+    # defaults, the same fail-safe the keys above get.
+    srv2 = config.get("server")
+    if isinstance(srv2, dict) and not isinstance(srv2.get("host"), str):
+        log.warning("config: server.host invalid (%r); using default %r",
+                    srv2.get("host"), DEFAULT_CONFIG["server"]["host"])
+        srv2["host"] = DEFAULT_CONFIG["server"]["host"]
+    for _sec, _key in (("flight_api", "api_key"),
+                       ("threat_feeds", "abuse_ch_auth_key")):
+        _sub = config.get(_sec)
+        if isinstance(_sub, dict) and not isinstance(_sub.get(_key), str):
+            log.warning("config: %s.%s invalid (%r); using default ''",
+                        _sec, _key, _sub.get(_key))
+            _sub[_key] = ""
+    for _key in ("briefing_token", "admin_key"):
+        if not isinstance(config.get(_key), str):
+            log.warning("config: %s invalid (%r); using default ''",
+                        _key, config.get(_key))
+            config[_key] = ""
     # BH2-12: CORS lockdown regression guard. Starlette treats the
     # string "*" as a wildcard allowlist (`"*" in allow_origins` is a
     # substring check on a str), so a hand-edited `cors_origins: "*"`

@@ -16,6 +16,7 @@ Proves:
       error style, with no traceback leaked.
 """
 import importlib.util
+import io
 import json
 import shutil
 import sys
@@ -327,6 +328,112 @@ def test_cors_string_star_is_not_a_wildcard(cors_star_app):
     resp = client.get("/health", headers={"Origin": "https://evil.example"})
     assert resp.status_code == 200
     assert "access-control-allow-origin" not in resp.headers
+
+
+@pytest.fixture(scope="module")
+def tunnel_str_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-tunnelstr")
+    return _load_app(tmp, "sl_app_tunnelstr", 'tunnel:\n  enabled: "false"\n')
+
+
+def test_tunnel_enabled_string_false_is_not_tunnel_on(tunnel_str_app):
+    """S3-1: `enabled: "false"` as a quoted YAML string is truthy in
+    Python. It must NOT switch off the localhost admin bypass (the
+    operator said the tunnel is OFF) nor turn on CF-Connecting-IP
+    trust — only a literal bool is honored, else the default."""
+    assert tunnel_str_app.config["tunnel"]["enabled"] is False
+    client = TestClient(tunnel_str_app.app, raise_server_exceptions=False,
+                        client=("127.0.0.1", 50000))
+    assert client.get("/admin").status_code == 200
+
+
+@pytest.fixture(scope="module")
+def tunnel_on_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-tunnelon")
+    return _load_app(tmp, "sl_app_tunnelon", "tunnel:\n  enabled: true\n")
+
+
+def test_tunnel_enabled_literal_true_still_disables_bypass(tunnel_on_app):
+    """S3-1 companion: a real bool true keeps the designed behavior —
+    with the tunnel on, localhost no longer bypasses the admin key."""
+    assert tunnel_on_app.config["tunnel"]["enabled"] is True
+    client = TestClient(tunnel_on_app.app, raise_server_exceptions=False,
+                        client=("127.0.0.1", 50000))
+    assert client.get("/admin").status_code == 403
+
+
+@pytest.fixture(scope="module")
+def apikey_int_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-apikeyint")
+    return _load_app(tmp, "sl_app_apikeyint", "flight_api:\n  api_key: 12345\n")
+
+
+def test_non_string_flight_api_key_does_not_500_flights(apikey_int_app):
+    """S3-2: a numeric api_key in a hand-edited config used to crash
+    the public /flights page (.strip() on an int). It normalizes to
+    the empty default, so the page renders its 'no key' state."""
+    assert apikey_int_app.config["flight_api"]["api_key"] == ""
+    client = TestClient(apikey_int_app.app, raise_server_exceptions=False)
+    assert client.get("/flights", params={"q": "AA100"}).status_code == 200
+
+
+@pytest.fixture(scope="module")
+def forms_app(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-forms")
+    return _load_app(tmp, "sl_app_forms", 'admin_key: "sekrit"\n')
+
+
+def test_csv_export_neutralizes_leading_newline_formula(forms_app):
+    """BH2-14 permanent pin: a stored cell starting with a newline
+    then a formula char is quote-prefixed in the CSV export."""
+    import csv as _csv
+    client = TestClient(forms_app.app, raise_server_exceptions=False,
+                        client=("127.0.0.1", 50000))
+    with client:
+        r = client.post("/api/contact", json={
+            "name": "\n=2+5", "email": "a@b.co", "message": "hi"})
+        assert r.status_code == 200
+        r = client.get("/api/admin/export", params={"type": "contacts"})
+    rows = list(_csv.reader(io.StringIO(r.content.decode("utf-8"))))
+    flat = [c for row in rows for c in row]
+    assert any(c.startswith("'") and "=2+5" in c for c in flat)
+
+
+def test_admin_fail_table_prunes_stale_entries(forms_app):
+    """BH2-15 permanent pin: the failed-admin-attempt table prunes
+    expired entries instead of growing one row per IP forever."""
+    import time as _time
+    now = _time.time()
+    for i in range(5000):
+        forms_app._admin_fails[f"10.9.0.{i}"] = [now - 10000]
+    client = TestClient(forms_app.app, raise_server_exceptions=False)
+    r = client.get("/api/admin/submissions",
+                   headers={"X-Admin-Key": "wrong"})
+    assert r.status_code == 403
+    assert len(forms_app._admin_fails) < 100
+
+
+def test_newsletter_non_unique_integrity_error_surfaces(forms_app):
+    """BH2-13 permanent pin: only the UNIQUE (duplicate) integrity
+    error is swallowed as ok:true; any other integrity failure must
+    surface instead of faking a successful signup."""
+    import sqlite3 as _sqlite3
+    client = TestClient(forms_app.app, raise_server_exceptions=False,
+                        client=("127.0.0.1", 50000))
+    with client:
+        conn = _sqlite3.connect(forms_app.DB_PATH)
+        conn.execute("CREATE TRIGGER s3boom BEFORE INSERT ON newsletter "
+                     "BEGIN SELECT RAISE(ABORT,'custom integrity boom'); END")
+        conn.commit(); conn.close()
+        try:
+            r = client.post("/api/newsletter", json={"email": "x@y.co"})
+            assert r.status_code >= 500
+        finally:
+            conn = _sqlite3.connect(forms_app.DB_PATH)
+            conn.execute("DROP TRIGGER s3boom"); conn.commit(); conn.close()
+        r1 = client.post("/api/newsletter", json={"email": "dup@y.co"})
+        r2 = client.post("/api/newsletter", json={"email": "dup@y.co"})
+        assert r1.json()["ok"] is True and r2.json()["ok"] is True
 
 
 @pytest.fixture(scope="module")
