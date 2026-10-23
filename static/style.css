@@ -1,4 +1,4 @@
-/* Sentinel Live — green on black. No purple. */
+/* Sentinel Safeguard — green on black. No purple. */
 :root {
   --bg: #060807;
   --panel: #0c100d;
@@ -24,16 +24,48 @@ a:hover { text-decoration: underline; }
 .warn { color: var(--amber); }
 .pad { padding: 1em; }
 
+/* Nav upgrade 2026-10-23: one header across the whole site — logo +
+   wordmark left, page links + Contact button right, current page marked,
+   sticky; on phones the links become a scrollable row of 44px targets. */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: .7em 1.2em; background: #000; border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; justify-content: space-between; gap: 1em;
+  flex-wrap: wrap; padding: .55em 1.2em; background: rgba(0,0,0,.94);
+  border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 1000;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-.brand { font-weight: 800; letter-spacing: .12em; color: #fff; font-size: 1.1em; }
-.brand .mark { color: var(--grn); }
-.brand em { font-style: normal; color: var(--grn); }
-.topbar nav a { margin-left: 1.1em; color: var(--txt); font-weight: 600; }
-.topbar nav a:hover { color: var(--grn); }
+.brand { display: inline-flex; align-items: center; gap: .6em; color: #fff; min-height: 44px; }
+.brand:hover { text-decoration: none; }
+.brand-logo { height: 40px; width: auto; display: block; border-radius: 6px; }
+.brand-name { font-weight: 800; letter-spacing: .08em; font-size: 1.05em; white-space: nowrap; }
+.brand-name em { font-style: normal; color: var(--grn); }
+.mainnav { display: flex; align-items: center; gap: .2em; }
+.mainnav a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: .35em .8em;
+  color: var(--txt); font-weight: 600; border-radius: 8px; white-space: nowrap;
+  transition: color .18s ease, background-color .18s ease;
+}
+.mainnav a:hover { color: var(--grn); text-decoration: none; background: rgba(0,230,118,.08); }
+.mainnav a.active {
+  color: var(--grn); text-decoration: underline;
+  text-underline-offset: 6px; text-decoration-thickness: 2px;
+}
+.mainnav a.nav-cta {
+  background: var(--grn-dim); color: #04120a; font-weight: 700; margin-left: .7em;
+  transition: background-color .18s ease, transform .12s ease;
+}
+.mainnav a.nav-cta:hover { background: var(--grn); color: #04120a; text-decoration: none; }
+.mainnav a.nav-cta:active { transform: scale(.97); }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+  outline: 2px solid var(--grn); outline-offset: 2px;
+}
+@media (max-width: 880px) {
+  .topbar { flex-direction: column; align-items: stretch; gap: .25em; padding: .5em .9em .4em; }
+  .brand { min-height: 40px; }
+  .mainnav { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -.9em; padding: 0 .9em; }
+  .mainnav::-webkit-scrollbar { display: none; }
+  .mainnav a { padding: .35em .65em; }
+}
 
 main { max-width: 1100px; margin: 0 auto; padding: 1.2em; }
 footer {
@@ -65,6 +97,18 @@ footer {
 .map.small { height: 320px; margin-top: 1em; }
 @media (max-width: 700px) { .map { height: 340px; } .map.small { height: 300px; } }
 .leaflet-container { background: #000; font-family: inherit; }
+/* Map loading shimmer (polish 2026-10-23): a gentle sweep behind the tiles
+   until the first tile batch lands (the basemap code adds .tiles-in on the
+   map's load event); loaded tiles cover it, so it never runs over a
+   rendered map and costs nothing while panning. */
+.leaflet-container:not(.tiles-in) {
+  background: linear-gradient(100deg, #070a08 40%, #111711 50%, #070a08 60%);
+  background-size: 200% 100%;
+  animation: mapShimmer 1.6s linear infinite;
+}
+@keyframes mapShimmer { from { background-position: 180% 0; } to { background-position: -20% 0; } }
+.leaflet-popup-content-wrapper { animation: popIn .18s ease both; }
+@keyframes popIn { from { opacity: 0; transform: translateY(4px) scale(.98); } to { opacity: 1; transform: none; } }
 
 /* Maps fix 2026-10-23: shared detailed-map chrome on threat/geo/flights. */
 .maplegend {
@@ -164,6 +208,46 @@ select, input[type=text] {
   background: #000; color: var(--txt); border: 1px solid var(--line);
   border-radius: 6px; padding: .5em .8em; font-size: 1em;
 }
+
+/* Status page (styles added 2026-10-23 — the template's classes shipped
+   without rules, so the cards/table/badges rendered unstyled). */
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1em; margin: 1em 0 1.6em; }
+.stat-card {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1em 1.2em;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.stat-card:hover { border-color: var(--grn-dim); box-shadow: 0 6px 22px rgba(0,0,0,.45); }
+.stat-card.ok { border-color: var(--grn-dim); }
+.stat-label { color: var(--dim); font-size: .8em; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.stat-value { font-size: 1.9em; font-weight: 800; color: #fff; margin: .15em 0; display: flex; align-items: center; gap: .45em; }
+.stat-card .pulse { width: 11px; height: 11px; flex: 0 0 auto; background: var(--grn); border-color: #7dffb0; }
+.stat-sub { color: var(--dim); font-size: .85em; }
+.status-table { margin-bottom: 1.2em; }
+.badge {
+  display: inline-block; padding: .12em .7em; border-radius: 999px; font-size: .82em; font-weight: 700;
+  background: #16201a; color: var(--txt); border: 1px solid var(--line); text-transform: capitalize;
+}
+.badge.ok { background: #0a2a16; color: var(--grn); border-color: var(--grn-dim); }
+.badge.error, .badge.failed { background: #2a0d0d; color: var(--red); border-color: #5c2222; }
+.badge.stale, .badge.degraded { background: #2a2107; color: var(--amber); border-color: #5c4a14; }
 label { margin-right: 1em; }
 #csv { margin-left: 1em; }
 h2 { color: #fff; border-bottom: 1px solid var(--line); padding-bottom: .3em; }
+
+/* GUI polish 2026-10-23: page fade-in, interactive states, spacing rhythm.
+   Motion is decorative only — nothing waits on it — and the reduced-motion
+   block at the end turns all of it (plus the pre-existing marker pulses)
+   off for visitors who ask for that. */
+main { animation: pageIn .38s ease both; }
+@keyframes pageIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+button, .card, .counter, input, select, textarea { transition: background-color .18s ease, border-color .18s ease, color .18s ease, box-shadow .18s ease, transform .12s ease; }
+button:active { transform: scale(.98); }
+.card:hover { box-shadow: 0 6px 22px rgba(0,0,0,.45); }
+.counter:hover { border-color: var(--grn-dim); }
+input:focus, select:focus, textarea:focus { border-color: var(--grn-dim); }
+section { margin-bottom: 1.5em; }
+.pagehead { margin-bottom: 1.2em; }
+@media (max-width: 700px) { main { padding: 1em .9em; } section { margin-bottom: 1.2em; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
