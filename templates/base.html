@@ -9,17 +9,17 @@
 </head>
 <body>
 <header class="topbar">
-  <a class="brand" href="/index.html">
+  <a class="brand" href="/">
     <img class="brand-logo" src="/assets/sentinel-safeguard-logo.jpg" alt="" width="33" height="40">
     <span class="brand-name">Sentinel <em>Safeguard</em></span>
   </a>
   <nav class="mainnav" aria-label="Main">
-    <a href="/index.html"{% if request.url.path in ['/', '/index.html'] %} class="active" aria-current="page"{% endif %}>Home</a>
+    <a href="/"{% if request.url.path in ['/', '/index.html'] %} class="active" aria-current="page"{% endif %}>Home</a>
     <a href="/threat-map"{% if request.url.path == '/threat-map' %} class="active" aria-current="page"{% endif %}>Threat Map</a>
     <a href="/geopolitical"{% if request.url.path == '/geopolitical' %} class="active" aria-current="page"{% endif %}>Geopolitical</a>
     <a href="/flights"{% if request.url.path == '/flights' %} class="active" aria-current="page"{% endif %}>Flights</a>
     <a href="/report-issue"{% if request.url.path.startswith('/report-issue') %} class="active" aria-current="page"{% endif %}>Report an Issue</a>
-    <a class="nav-cta" href="/index.html#contact">Contact</a>
+    <a class="nav-cta" href="/#contact">Contact</a>
   </nav>
 </header>
 <main>

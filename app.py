@@ -32,8 +32,8 @@ import httpx
 import yaml
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import (HTMLResponse, JSONResponse, Response,
-                               StreamingResponse)
+from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
+                               Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -654,6 +654,26 @@ def _ctx(request: Request, **kw):
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
+    # Front door = the public marketing homepage (owner order
+    # 2026-10-23: "Homepage should be front door"). When the static
+    # site is present, its index.html IS the homepage — serve the
+    # exact bytes /index.html serves. Without a site dir (e.g. the
+    # packaged server build), fall back to the operations landing
+    # so / still works.
+    home = _SITE_DIR / "index.html"
+    if home.is_file():
+        return FileResponse(home, media_type="text/html")
+    return _operations_page(request)
+
+
+@app.get("/operations", response_class=HTMLResponse)
+async def operations(request: Request):
+    # The Live Operations landing (aggregates the live data views)
+    # keeps its own home here after the homepage took over /.
+    return _operations_page(request)
+
+
+def _operations_page(request: Request):
     return templates.TemplateResponse(request, "index.html", _ctx(
         request, threat=store["threat"], geo=store["geo"], news=store["news"]))
 
