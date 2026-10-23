@@ -2,7 +2,7 @@
 # (PyInstaller bundles these into the single-file .exe; no Python needed on the target machine)
 # Pinned to the exact versions the v1.0.2 release build shipped with
 # (verified from that build's CI log); dependabot proposes bumps.
-fastapi==0.143.0
+fastapi==0.156.2
 uvicorn==0.54.0
 httpx==0.28.1
 jinja2==3.1.6
