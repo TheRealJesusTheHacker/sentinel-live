@@ -399,9 +399,10 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is a single file, `tests/test_hackproof_proxy.py`, with **16
-tests** — verified by collection from a fresh snapshot of this repository
-(`16 tests collected`, and `16 passed` when run for this README pass).
+The suite is two files — `tests/test_hackproof_proxy.py` (22 tests) and
+`tests/test_turnstile.py` (7 tests) — with **29 tests** in total, verified
+by collection and a full run from a fresh snapshot of this repository on
+2026-10-23 (`29 tests collected`, and `29 passed`).
 It builds the app against fake payments upstreams and covers, among other
 things:
 
@@ -417,10 +418,16 @@ things:
 - the proxied POST routes being rate-limited;
 - a non-loopback upstream falling back to the default; and
 - a `"*"` CORS value — as a string or as a list entry — not acting as a
-  wildcard.
+  wildcard; and
+- Cloudflare Turnstile verification on the public form endpoints:
+  disabled (or enabled with no secret) is a no-op, a missing or invalid
+  token is rejected when enabled, a valid token is accepted, and a
+  siteverify outage fails closed.
 
-There is no test suite for the pages, feeds, or form APIs in this
-repository; those areas are exercised manually via `run.bat`.
+There is no test suite for the pages or feeds in this repository; those
+areas are exercised manually via `run.bat`. The form APIs are covered
+only where the tests above touch them (Turnstile gating, CSV export,
+newsletter handling, admin throttling).
 
 ## Status
 
