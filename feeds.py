@@ -377,6 +377,82 @@ GEO_KEYWORDS = [
     ("united nations", 40.7, -74.0, "United Nations"), ("gaza", 31.5, 34.4, "Gaza"),
     ("horn of africa", 5.0, 46.0, "Horn of Africa"), ("arctic", 75.0, -40.0, "Arctic"),
     ("brics", 55.7, 37.6, "BRICS"), ("g7", 50.8, 4.4, "G7"), ("g20", 28.6, 77.2, "G20"),
+    # Maps fix 2026-10-23: gazetteer expansion. Matching is a plain
+    # substring scan of the headline (heuristic — the longest matching
+    # keyword wins in geo_hotspots, so specific places beat generic ones,
+    # e.g. "nigeria" over "niger", "south china sea" over "china").
+    # Positions are country/region level, not exact story locations.
+    ("kenya", -1.29, 36.82, "Kenya"), ("nairobi", -1.29, 36.82, "Nairobi"),
+    ("nigeria", 9.08, 8.68, "Nigeria"), ("lagos", 6.52, 3.37, "Lagos"),
+    ("south africa", -29.0, 24.7, "South Africa"),
+    ("johannesburg", -26.2, 28.0, "Johannesburg"),
+    ("egypt", 26.8, 30.8, "Egypt"), ("cairo", 30.0, 31.2, "Cairo"),
+    ("morocco", 31.8, -6.0, "Morocco"), ("algeria", 28.0, 1.66, "Algeria"),
+    ("tunisia", 33.9, 9.6, "Tunisia"),
+    ("tanzania", -6.4, 34.9, "Tanzania"), ("uganda", 1.4, 32.4, "Uganda"),
+    ("angola", -12.5, 17.5, "Angola"), ("mozambique", -17.8, 35.5, "Mozambique"),
+    ("ghana", 7.9, -1.2, "Ghana"), ("cameroon", 5.7, 12.7, "Cameroon"),
+    ("mali", 17.6, -3.99, "Mali"), ("chad", 15.45, 18.73, "Chad"),
+    ("congo", -0.7, 23.5, "Congo Basin"),
+    ("india", 21.1, 78.4, "India"), ("delhi", 28.6, 77.2, "Delhi"),
+    ("mumbai", 19.1, 72.9, "Mumbai"), ("bangladesh", 23.7, 90.4, "Bangladesh"),
+    ("sri lanka", 7.9, 80.8, "Sri Lanka"),
+    ("nepal", 28.4, 84.1, "Nepal"),
+    ("thailand", 15.9, 100.99, "Thailand"), ("bangkok", 13.75, 100.5, "Bangkok"),
+    ("vietnam", 14.1, 108.3, "Vietnam"), ("hanoi", 21.0, 105.8, "Hanoi"),
+    ("indonesia", -2.2, 118.0, "Indonesia"), ("jakarta", -6.2, 106.8, "Jakarta"),
+    ("philippines", 12.9, 121.8, "Philippines"), ("manila", 14.6, 121.0, "Manila"),
+    ("malaysia", 4.2, 102.0, "Malaysia"), ("singapore", 1.35, 103.8, "Singapore"),
+    ("cambodia", 12.6, 105.0, "Cambodia"), ("mongolia", 46.9, 103.8, "Mongolia"),
+    ("kazakhstan", 48.0, 66.9, "Kazakhstan"),
+    ("japan", 36.2, 138.3, "Japan"), ("tokyo", 35.7, 139.7, "Tokyo"),
+    ("china", 35.0, 104.9, "China"), ("shanghai", 31.2, 121.5, "Shanghai"),
+    ("hong kong", 22.3, 114.2, "Hong Kong"),
+    ("australia", -25.3, 133.8, "Australia"), ("sydney", -33.9, 151.2, "Sydney"),
+    ("new zealand", -41.8, 172.8, "New Zealand"),
+    ("turkey", 38.96, 35.2, "Turkey"), ("ankara", 39.9, 32.9, "Ankara"),
+    ("istanbul", 41.0, 28.97, "Istanbul"),
+    ("saudi arabia", 23.9, 45.1, "Saudi Arabia"), ("riyadh", 24.7, 46.7, "Riyadh"),
+    ("united arab emirates", 24.2, 54.4, "UAE"), ("dubai", 25.2, 55.3, "Dubai"),
+    ("qatar", 25.3, 51.2, "Qatar"), ("doha", 25.3, 51.5, "Doha"),
+    ("iraq", 33.2, 43.7, "Iraq"), ("baghdad", 33.3, 44.4, "Baghdad"),
+    ("jordan", 31.2, 36.6, "Jordan"), ("amman", 31.9, 35.9, "Amman"),
+    ("jerusalem", 31.78, 35.21, "Jerusalem"),
+    ("black sea", 43.4, 34.0, "Black Sea"), ("baltic", 58.5, 20.5, "Baltic Sea"),
+    ("united kingdom", 54.0, -2.5, "United Kingdom"), ("london", 51.5, -0.12, "London"),
+    ("britain", 54.0, -2.5, "United Kingdom"),
+    ("france", 46.6, 2.5, "France"), ("paris", 48.85, 2.35, "Paris"),
+    ("germany", 51.1, 10.4, "Germany"), ("berlin", 52.5, 13.4, "Berlin"),
+    ("italy", 42.8, 12.8, "Italy"), ("rome", 41.9, 12.5, "Rome"),
+    ("spain", 40.2, -3.6, "Spain"), ("madrid", 40.4, -3.7, "Madrid"),
+    ("portugal", 39.6, -8.0, "Portugal"), ("lisbon", 38.7, -9.1, "Lisbon"),
+    ("greece", 39.1, 21.8, "Greece"), ("athens", 38.0, 23.7, "Athens"),
+    ("poland", 51.9, 19.1, "Poland"), ("warsaw", 52.2, 21.0, "Warsaw"),
+    ("romania", 45.9, 24.97, "Romania"), ("bucharest", 44.4, 26.1, "Bucharest"),
+    ("bulgaria", 42.8, 25.5, "Bulgaria"), ("hungary", 47.2, 19.5, "Hungary"),
+    ("czech", 49.8, 15.5, "Czechia"), ("prague", 50.1, 14.4, "Prague"),
+    ("austria", 47.6, 14.1, "Austria"), ("vienna", 48.2, 16.4, "Vienna"),
+    ("switzerland", 46.8, 8.2, "Switzerland"), ("netherlands", 52.1, 5.3, "Netherlands"),
+    ("amsterdam", 52.4, 4.9, "Amsterdam"), ("ireland", 53.4, -8.2, "Ireland"),
+    ("dublin", 53.3, -6.3, "Dublin"), ("iceland", 65.0, -18.7, "Iceland"),
+    ("sweden", 60.1, 18.6, "Sweden"), ("stockholm", 59.3, 18.1, "Stockholm"),
+    ("norway", 60.5, 8.5, "Norway"), ("oslo", 59.9, 10.7, "Oslo"),
+    ("denmark", 56.3, 9.5, "Denmark"), ("copenhagen", 55.7, 12.6, "Copenhagen"),
+    ("finland", 61.9, 25.7, "Finland"), ("helsinki", 60.2, 25.0, "Helsinki"),
+    ("estonia", 58.6, 25.0, "Estonia"), ("latvia", 56.9, 24.6, "Latvia"),
+    ("lithuania", 56.0, 24.0, "Lithuania"), ("croatia", 45.1, 16.4, "Croatia"),
+    ("tbilisi", 41.7, 44.8, "Tbilisi"),
+    ("cyprus", 35.0, 33.0, "Cyprus"),
+    ("canada", 57.0, -102.0, "Canada"), ("ottawa", 45.4, -75.7, "Ottawa"),
+    ("toronto", 43.7, -79.4, "Toronto"),
+    ("mexico", 23.6, -101.9, "Mexico"), ("mexico city", 19.4, -99.1, "Mexico City"),
+    ("brazil", -14.2, -51.9, "Brazil"), ("brasilia", -15.8, -47.9, "Brasilia"),
+    ("argentina", -38.4, -63.6, "Argentina"), ("buenos aires", -34.6, -58.4, "Buenos Aires"),
+    ("chile", -31.8, -70.7, "Chile"), ("santiago", -33.4, -70.7, "Santiago"),
+    ("peru", -9.2, -75.0, "Peru"), ("lima", -12.0, -77.0, "Lima"),
+    ("colombia", 3.9, -73.1, "Colombia"), ("bogota", 4.7, -74.1, "Bogota"),
+    ("washington", 38.9, -77.0, "Washington, D.C."),
+    ("new york", 40.7, -74.0, "New York"),
 ]
 
 
@@ -400,16 +476,38 @@ def impact_note(text):
 
 
 def geo_hotspots(items):
-    spots, seen = [], set()
+    """Group stories per hotspot (maps fix 2026-10-23).
+
+    Previously only the FIRST story per place was kept (one title per
+    hotspot, no count). Now every matching story is grouped under its
+    label (capped at 8 stored stories per hotspot) with a total count,
+    so the map can show clusters and multi-story popups. Matching stays
+    a headline substring heuristic; when several keywords match, the
+    LONGEST keyword wins (specific beats generic), ties keep list order.
+    "title" is retained (first story) for backward compatibility.
+    """
+    groups, order = {}, []
     for it in items:
-        t = (it["title"] or "").lower()
+        t = (it.get("title") or "").lower()
+        best = None
         for kw, lat, lon, label in GEO_KEYWORDS:
-            if kw in t and label not in seen:
-                seen.add(label)
-                spots.append({"lat": lat, "lon": lon, "label": label,
-                              "title": it["title"]})
-                break
-    return spots[:25]
+            if kw in t and (best is None or len(kw) > len(best[0])):
+                best = (kw, lat, lon, label)
+        if best is None:
+            continue
+        _, lat, lon, label = best
+        g = groups.get(label)
+        if g is None:
+            g = groups[label] = {"lat": lat, "lon": lon, "label": label,
+                                 "title": it.get("title"), "count": 0,
+                                 "stories": []}
+            order.append(label)
+        g["count"] += 1
+        if len(g["stories"]) < 8:
+            g["stories"].append({
+                "title": it.get("title"), "source": it.get("source"),
+                "published": it.get("published"), "link": it.get("link")})
+    return [groups[k] for k in order[:25]]
 
 
 async def fetch_geopolitical(urls, timeout=20):
@@ -490,6 +588,21 @@ async def lookup_flight(number, api_key, timeout=20):
         return v if isinstance(v, dict) else {}
 
     dep, arr = _sub(f, "departure"), _sub(f, "arrival")
+    # Maps fix 2026-10-23: pass the provider's live aircraft position
+    # through (numbers only) so the flight page can plot it when present.
+    live_raw = _sub(f, "live")
+
+    def _num(v):
+        return v if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    live = None
+    if _num(live_raw.get("latitude")) is not None and _num(live_raw.get("longitude")) is not None:
+        live = {"latitude": _num(live_raw.get("latitude")),
+                "longitude": _num(live_raw.get("longitude")),
+                "altitude": _num(live_raw.get("altitude")),
+                "direction": _num(live_raw.get("direction")),
+                "speed_horizontal": _num(live_raw.get("speed_horizontal")),
+                "is_ground": bool(live_raw.get("is_ground"))}
     return {
         "number": _sub(f, "flight").get("iata") or num,
         "airline": _sub(f, "airline").get("name") or "",
@@ -500,6 +613,7 @@ async def lookup_flight(number, api_key, timeout=20):
         "arrival": {k: arr.get(k) for k in
                     ("airport", "iata", "terminal", "gate", "scheduled", "estimated", "actual", "delay")},
         "aircraft": _sub(f, "aircraft").get("registration") or "",
+        "live": live,
     }, None
 
 
@@ -521,4 +635,64 @@ AIRPORT_COORDS = {
     "LHR": (51.4700, -0.4543), "CDG": (49.0097, 2.5479),
     "FRA": (50.0379, 8.5622), "AMS": (52.3105, 4.7683),
     "NRT": (35.7720, 140.3929), "ICN": (37.4602, 126.4407),
+    # Maps fix 2026-10-23: expanded from 28 to ~140 airports (major US
+    # hubs + world gateways) so most looked-up routes can be plotted.
+    "PDX": (45.5898, -122.5951), "SLC": (40.7899, -111.9791),
+    "OKC": (35.3931, -97.6007), "TUL": (36.1984, -95.8881),
+    "ICT": (37.6499, -97.4331), "OMA": (41.3032, -95.8941),
+    "DSM": (41.5340, -93.6631), "MSY": (29.9934, -90.2580),
+    "MEM": (35.0424, -89.9767), "LIT": (34.7294, -92.2243),
+    "HOU": (29.6454, -95.2789), "DAL": (32.8471, -96.8518),
+    "SAT": (29.5337, -98.4697), "ELP": (31.8072, -106.3776),
+    "ABQ": (35.0402, -106.6090), "TUS": (32.1161, -110.9410),
+    "SAN": (32.7338, -117.1933), "SNA": (33.6757, -117.8682),
+    "ONT": (34.0560, -117.6012), "SMF": (38.6954, -121.5908),
+    "SJC": (37.3639, -121.9289), "OAK": (37.7126, -122.2197),
+    "RNO": (39.4986, -119.7681), "BOI": (43.5644, -116.2228),
+    "ANC": (61.1743, -149.9962), "HNL": (21.3245, -157.9251),
+    "IND": (39.7173, -86.2944), "CMH": (39.9980, -82.8919),
+    "CLE": (41.4117, -81.8498), "PIT": (40.4915, -80.2329),
+    "BWI": (39.1754, -76.6684), "PHL": (39.8744, -75.2424),
+    "RDU": (35.8801, -78.7880), "JAX": (30.4941, -81.6879),
+    "MCO": (28.5455, -81.2578), "TPA": (27.9755, -82.5332),
+    "FLL": (26.0726, -80.1527), "PBI": (26.6832, -80.0956),
+    "CHS": (32.8986, -80.0405), "BHM": (33.5629, -86.7535),
+    "XNA": (36.2819, -94.3068), "SGF": (37.2457, -93.3886),
+    "YYZ": (43.6777, -79.6248), "YVR": (49.1967, -123.1815),
+    "YYC": (51.1315, -114.0103), "YUL": (45.4706, -73.7408),
+    "MEX": (19.4363, -99.0721), "CUN": (21.0365, -86.8771),
+    "PTY": (9.0714, -79.3835), "SJU": (18.4394, -66.0018),
+    "GRU": (-23.4356, -46.4731), "GIG": (-22.8099, -43.2505),
+    "EZE": (-34.8222, -58.5358), "SCL": (-33.3930, -70.7858),
+    "LIM": (-12.0219, -77.1143), "BOG": (4.7016, -74.1469),
+    "LGW": (51.1537, -0.1821), "MAN": (53.3493, -2.2796),
+    "DUB": (53.4213, -6.2701), "MAD": (40.4983, -3.5676),
+    "BCN": (41.2974, 2.0833), "LIS": (38.7742, -9.1342),
+    "FCO": (41.8003, 12.2500), "MXP": (45.6306, 8.7231),
+    "ZRH": (47.4647, 8.5492), "VIE": (48.1103, 16.5697),
+    "BRU": (50.9010, 4.4844), "CPH": (55.6180, 12.6560),
+    "ARN": (59.6519, 17.9186), "OSL": (60.1939, 11.1004),
+    "HEL": (60.3172, 24.9633), "KEF": (63.9850, -22.6056),
+    "WAW": (52.1657, 20.9671), "PRG": (50.1008, 14.2632),
+    "BUD": (47.4369, 19.2556), "ATH": (37.9364, 23.9445),
+    "IST": (41.2753, 28.7519), "DXB": (25.2532, 55.3657),
+    "DOH": (25.2731, 51.6081), "AUH": (24.4330, 54.6511),
+    "RUH": (24.9576, 46.6989), "KWI": (29.2266, 47.9689),
+    "BOM": (19.0896, 72.8656), "DEL": (28.5562, 77.1000),
+    "BLR": (13.1986, 77.7066), "MAA": (13.0600, 80.2718),
+    "HYD": (17.2403, 78.4294), "CCU": (22.6547, 88.4467),
+    "SIN": (1.3644, 103.9915), "KUL": (2.7456, 101.7072),
+    "BKK": (13.6900, 100.7501), "HKG": (22.3080, 113.9185),
+    "TPE": (25.0797, 121.2342), "MNL": (14.5086, 121.0194),
+    "CGK": (-6.1256, 106.6559), "HAN": (21.2142, 105.8028),
+    "SGN": (10.8188, 106.6520), "PEK": (40.0799, 116.6031),
+    "PVG": (31.1443, 121.8083), "CAN": (23.3924, 113.2988),
+    "SZX": (22.6393, 113.8107), "HND": (35.5494, 139.7798),
+    "KIX": (34.4347, 135.2441), "NGO": (34.8584, 136.8054),
+    "SYD": (-33.9399, 151.1753), "MEL": (-37.6690, 144.8410),
+    "BNE": (-27.3842, 153.1175), "PER": (-31.9403, 115.9672),
+    "AKL": (-37.0082, 174.7850), "JNB": (-26.1367, 28.2411),
+    "CPT": (-33.9715, 18.6021), "NBO": (-1.3192, 36.9278),
+    "ADD": (8.9779, 38.7993), "CAI": (30.1219, 31.4056),
+    "LOS": (6.5774, 3.3212), "ACC": (5.6052, -0.1667),
 }

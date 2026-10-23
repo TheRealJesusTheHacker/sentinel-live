@@ -11,6 +11,13 @@
   <p id="upd" class="dim">Loading&hellip;</p>
 </section>
 <div id="map" class="map"></div>
+<div class="maplegend">
+  <b>Legend</b>
+  <span><i class="dot" style="background:#ffb300;border:2px solid #ffe082"></i>story hotspot — number = stories placed there</span>
+</div>
+<p class="dim">Hotspots are placed by matching place names in headlines against a world gazetteer — positions are
+approximate (country/region level). Stories that match no known place stay in the feed below. Zoom in — the
+Detailed basemap shows borders, regions, cities and roads; switch to Dark in the layer control (top right).</p>
 <section>
   <h2>Latest stories</h2>
   <div id="stories"><p class="dim">Loading&hellip;</p></div>
@@ -19,9 +26,19 @@
 {% block scripts %}
 <script>
 const map = L.map('map', {worldCopyJump: true}).setView([28, 8], 2);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-  {attribution: '&copy; OpenStreetMap &copy; CARTO', maxZoom: 6}).addTo(map);
-const hotIcon = L.divIcon({className: 'hot', iconSize: [12, 12]});
+// Maps fix 2026-10-23: detailed basemap standard shared by all three maps
+// (CARTO Voyager "Detailed" default + CARTO dark; the old layer capped zoom
+// at 6, which hid all detail past continent level).
+(function basemaps(m) {
+  const attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
+  const detailed = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
+  const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
+  detailed.addTo(m);
+  L.control.layers({'Detailed': detailed, 'Dark': dark}, null, {collapsed: true}).addTo(m);
+  L.control.scale({imperial: true}).addTo(m);
+})(map);
 let layers = [];
 async function load() {
   try {
@@ -31,8 +48,19 @@ async function load() {
       'Last updated ' + (d.updated || 'never') + (d.error ? ' — ' + d.error : '');
     layers.forEach(l => map.removeLayer(l)); layers = [];
     (d.hotspots || []).forEach(h => {
-      const m = L.marker([h.lat, h.lon], {icon: hotIcon})
-        .bindPopup('<b>' + esc(h.label) + '</b><br>' + esc(h.title));
+      // Server groups stories per hotspot (h.stories[], h.count); older
+      // payloads carried a single h.title — synthesize a one-story list.
+      const stories = (h.stories && h.stories.length) ? h.stories : [{title: h.title}];
+      const count = h.count || stories.length;
+      const icon = count > 1
+        ? L.divIcon({className: 'hotbadge', html: String(count), iconSize: [22, 22]})
+        : L.divIcon({className: 'hot', iconSize: [12, 12]});
+      const list = stories.slice(0, 5).map(s =>
+        '<li>' + (s.link ? '<a href="' + esc(s.link) + '" target="_blank" rel="noopener">' + esc(s.title) + '</a>' : esc(s.title)) +
+        '<br><span class="popmeta">' + esc(s.source || '') + (s.published ? ' &middot; ' + esc(s.published) : '') + '</span></li>').join('');
+      const m = L.marker([h.lat, h.lon], {icon: icon})
+        .bindPopup('<b>' + esc(h.label) + '</b> <span class="popmeta">' + count + (count === 1 ? ' story' : ' stories') + '</span>' +
+          '<ul>' + list + '</ul>' + (count > 5 ? '<span class="popmeta">+ ' + (count - 5) + ' more in the feed below</span>' : ''), {maxWidth: 340});
       m.addTo(map); layers.push(m);
     });
     document.getElementById('stories').innerHTML = (d.items || []).map(s =>

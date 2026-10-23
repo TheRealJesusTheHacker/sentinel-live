@@ -61,9 +61,42 @@ footer {
 .counter b { display: block; font-size: 1.8em; color: var(--grn); }
 .counter span { color: var(--dim); font-size: .85em; }
 
-.map { height: 420px; border: 1px solid var(--line); border-radius: 10px; background: #000; }
-.map.small { height: 260px; margin-top: 1em; }
+.map { height: 440px; border: 1px solid var(--line); border-radius: 10px; background: #000; }
+.map.small { height: 320px; margin-top: 1em; }
+@media (max-width: 700px) { .map { height: 340px; } .map.small { height: 300px; } }
 .leaflet-container { background: #000; font-family: inherit; }
+
+/* Maps fix 2026-10-23: shared detailed-map chrome on threat/geo/flights. */
+.maplegend {
+  display: flex; flex-wrap: wrap; gap: .35em 1.3em; align-items: center;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  padding: .55em .9em; margin: .6em 0 0; font-size: .85em; color: var(--dim);
+}
+.maplegend b { color: var(--txt); }
+.maplegend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: .45em; vertical-align: baseline; }
+.maplegend .dash { display: inline-block; width: 22px; border-top: 2px dashed var(--red); margin-right: .45em; vertical-align: middle; }
+.maplegend .dash.grn { border-top-color: var(--grn); }
+.hotbadge {
+  background: var(--amber); color: #241a00; font-weight: 800; font-size: 12px;
+  border: 2px solid #ffe082; border-radius: 999px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.45);
+}
+.plane {
+  background: none; border: none; color: var(--grn); font-size: 22px; line-height: 1;
+  text-shadow: 0 0 5px #000, 0 0 2px #000; text-align: center;
+}
+.leaflet-popup-content-wrapper { background: #0c100d; color: var(--txt); border: 1px solid var(--line); border-radius: 8px; }
+.leaflet-popup-tip { background: #0c100d; }
+.leaflet-popup-content { font-size: .93em; line-height: 1.5; margin: .8em 1em; }
+.leaflet-popup-content a { color: var(--grn); }
+.leaflet-popup-content .popmeta { color: var(--dim); font-size: .85em; }
+.leaflet-popup-content ul { margin: .3em 0 0; padding-left: 1.1em; }
+.leaflet-popup-close-button { color: var(--dim) !important; }
+.leaflet-control-layers { background: var(--panel) !important; color: var(--txt) !important; border: 1px solid var(--line) !important; border-radius: 8px !important; }
+.leaflet-control-scale-line { background: rgba(0,0,0,.55); color: #fff; border-color: #999; font-size: 10px; }
+.leaflet-control-attribution { background: rgba(0,0,0,.55) !important; color: #8a978c !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: #8a978c !important; }
 
 .pulse { background: var(--red); border-radius: 50%; border: 2px solid #ff8888;
   animation: pulse 1.6s ease-out infinite; }
