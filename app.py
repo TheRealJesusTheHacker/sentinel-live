@@ -76,6 +76,13 @@ DEFAULT_CONFIG = {
     "tunnel": {"enabled": False,
                "cloudflared_path": "C:\\Program Files\\cloudflared\\cloudflared.exe",
                "args": "tunnel --url http://127.0.0.1:8443"},
+    # Optional Cloudflare Turnstile bot check on the public forms
+    # (default OFF). When enabled AND a secret key is set, the three
+    # public POST handlers (/api/contact, /api/ticket, /api/newsletter)
+    # verify the form's cf-turnstile-response token with Cloudflare
+    # server-side before anything is stored. Disabled, or enabled with
+    # no secret configured, the handlers behave exactly as before.
+    "turnstile": {"enabled": False, "secret_key": ""},
     "briefing_token": "",
     "admin_key": "",
     # Optional HackProof payments pass-through (default OFF): when enabled,
@@ -263,6 +270,24 @@ def _validate_config_schema():
                         tcfg.get("enabled"),
                         DEFAULT_CONFIG["tunnel"]["enabled"])
             tcfg["enabled"] = DEFAULT_CONFIG["tunnel"]["enabled"]
+    # Turnstile's `enabled` gates the public form handlers, and the
+    # same S3-1 type confusion applies in mirror image: a quoted
+    # `enabled: "false"` is truthy, so the bot check would turn ON
+    # while the operator believed it OFF (every form submission
+    # suddenly rejected). Only a literal bool is honored, and the
+    # secret key must be a string.
+    tscfg = config.get("turnstile")
+    if isinstance(tscfg, dict):
+        if not isinstance(tscfg.get("enabled"), bool):
+            log.warning("config: turnstile.enabled invalid (%r); "
+                        "using default %r",
+                        tscfg.get("enabled"),
+                        DEFAULT_CONFIG["turnstile"]["enabled"])
+            tscfg["enabled"] = DEFAULT_CONFIG["turnstile"]["enabled"]
+        if not isinstance(tscfg.get("secret_key"), str):
+            log.warning("config: turnstile.secret_key invalid (%r); "
+                        "using default ''", tscfg.get("secret_key"))
+            tscfg["secret_key"] = ""
     # S3-2: the remaining scalar keys are consumed with str-only
     # operations (.strip() on the flight key, header values, token
     # comparisons). A non-string value from a hand-edited config —
@@ -746,10 +771,73 @@ async def _json_body(request: Request):
     return body
 
 
+# ------------------------------------------------------------------ turnstile
+TURNSTILE_SITEVERIFY_URL = \
+    "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+async def _turnstile_siteverify(secret: str, token: str, remoteip: str) -> dict:
+    """One call to Cloudflare's siteverify endpoint; returns the parsed
+    JSON body. Isolated into its own function so the handlers never
+    touch the network directly (and tests can stub exactly this seam).
+    Raises on any transport or parse failure — the caller fails closed.
+    The secret and token travel in the POST body only; neither is ever
+    logged."""
+    data = {"secret": secret, "response": token}
+    if remoteip and remoteip != "?":
+        data["remoteip"] = remoteip
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        resp = await client.post(TURNSTILE_SITEVERIFY_URL, data=data)
+    result = resp.json()
+    if not isinstance(result, dict):
+        raise ValueError("siteverify returned a non-object body")
+    return result
+
+
+async def _verify_turnstile(request: Request, body: dict):
+    """Cloudflare Turnstile gate shared by the public form handlers.
+
+    A no-op unless turnstile.enabled is true AND a secret key is
+    configured — in every other configuration the forms behave exactly
+    as they did before this check existed (local/staging unaffected).
+    When active, the payload's cf-turnstile-response token is verified
+    with Cloudflare server-side BEFORE anything is stored: a missing
+    or rejected token is a plain 400 in the API's usual style, and if
+    siteverify itself can't be reached the submission fails CLOSED
+    with a 503 pointing at the email/phone fallback — an outage never
+    silently waves a submission through."""
+    tscfg = config.get("turnstile") or {}
+    if not tscfg.get("enabled"):
+        return
+    secret = (tscfg.get("secret_key") or "").strip()
+    if not secret:
+        return
+    token = _s(body, "cf-turnstile-response").strip()
+    if not token:
+        raise HTTPException(400, "Please complete the bot check and try again.")
+    try:
+        result = await _turnstile_siteverify(secret, token, _client_ip(request))
+    except Exception:
+        log.warning("turnstile siteverify unreachable (path=%s)",
+                    request.url.path)
+        raise HTTPException(
+            503, "Bot check is unavailable right now — please contact us "
+                 "by email or phone instead.")
+    if result.get("success") is not True:
+        # Cloudflare's error-codes are safe to log (they name the
+        # failure class, never the secret or the token).
+        log.info("turnstile rejected a submission (path=%s codes=%s)",
+                 request.url.path, result.get("error-codes"))
+        raise HTTPException(
+            400, "Bot check failed — please try again, or contact us "
+                 "by email or phone.")
+
+
 @app.post("/api/contact")
 async def api_contact(request: Request):
     rate_limit(request)
     body = await _json_body(request)
+    await _verify_turnstile(request, body)
     name, email, message = _s(body, "name").strip(), _s(body, "email").strip(), \
                           _s(body, "message").strip()
     if not name or not email or not message or "@" not in email:
@@ -771,6 +859,7 @@ async def api_ticket(request: Request):
     """Get Help ticket intake — stores a ticket, no login required."""
     rate_limit(request, max_hits=10)
     body = await _json_body(request)
+    await _verify_turnstile(request, body)
     name, email, subject, message = (_s(body, k).strip()
                                     for k in ("name", "email", "subject", "message"))
     if not name or not email or "@" not in email or not subject or not message:
@@ -797,6 +886,7 @@ async def api_ticket(request: Request):
 async def api_newsletter(request: Request):
     rate_limit(request)
     body = await _json_body(request)
+    await _verify_turnstile(request, body)
     email = _s(body, "email").strip()
     if not email or "@" not in email:
         raise HTTPException(400, "A valid email is required.")

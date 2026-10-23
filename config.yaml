@@ -33,6 +33,21 @@ tunnel:
   # Named tunnel example (needs cloudflared login + DNS route):
   # args: "tunnel --hostname live.sentinelsafeguard.com --url http://127.0.0.1:8443"
 
+# Cloudflare Turnstile bot check for the public forms (optional).
+# Default OFF: while disabled — or enabled with no secret key set —
+# the contact, ticket, and newsletter forms behave exactly as they
+# do without it. To turn it on: create a Turnstile widget for this
+# site at https://challenges.cloudflare.com/, put the SITE key in the
+# web pages (it is public), paste the SECRET key here (it never goes
+# in a page or anywhere public), and set enabled: true. While on, a
+# submission whose bot-check token is missing or invalid is rejected
+# before anything is stored, and if Cloudflare's verification
+# service is unreachable the submission fails closed — the visitor
+# is told to email or call instead; nothing silently passes.
+turnstile:
+  enabled: false
+  secret_key: ""
+
 # Shared secret for POST /api/briefing. Leave empty to allow local posts
 # without a token (the port is localhost-only by default).
 briefing_token: ""
