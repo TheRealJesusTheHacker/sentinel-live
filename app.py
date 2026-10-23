@@ -959,7 +959,14 @@ async def api_briefing(request: Request):
     except Exception:
         pass
     body["ingested_at"] = _utcnow()
-    BRIEFING_PATH.write_text(json.dumps(body, ensure_ascii=False, indent=2), encoding="utf-8")
+    # Write via a temp file + atomic replace: a crash or a concurrent
+    # ingest mid-write must never leave a torn briefing.json behind
+    # (the loader ignores a corrupt file, which would silently drop
+    # the day's briefing from /news).
+    _brief_tmp = BRIEFING_PATH.with_name(BRIEFING_PATH.name + ".tmp")
+    _brief_tmp.write_text(json.dumps(body, ensure_ascii=False, indent=2),
+                          encoding="utf-8")
+    _brief_tmp.replace(BRIEFING_PATH)
     store["briefing"] = body
     log.info("briefing ingested for %s", body.get("date"))
     return {"ok": True, "date": body.get("date")}

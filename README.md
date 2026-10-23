@@ -12,10 +12,11 @@ serves live threat, geopolitical, flight, and news pages, plus the contact,
 ticket, and newsletter APIs behind the public site — packaged as a single
 Windows executable (`SentinelLive.exe`).
 
-It is built to run silently on aroura (Windows 11, always-on): one `.exe`, no
-Python install, no console window, started automatically at every boot by the
-installer described below. That is a design target, not a deployment claim —
-see [Status](#status).
+It is built to run silently on an always-on host: as a packaged Windows
+install it is one `.exe`, no Python install, no console window, started
+automatically at every boot by the installer described below. The current
+production deployment runs this same code from source on the owner's Linux
+server — see [Status](#status).
 
 ## Overview
 
@@ -59,6 +60,11 @@ a public port.
 - **Form intake with no accounts:** contact messages, Get Help tickets (the
   API returns the new `ticket_id`), and newsletter signups (duplicate emails
   still return success, so the endpoint does not reveal who is subscribed).
+- **Cloudflare Turnstile bot check (optional, config-gated):** when enabled
+  with a secret key configured, the three public form endpoints
+  (`/api/contact`, `/api/ticket`, `/api/newsletter`) verify the submission's
+  Turnstile token with Cloudflare server-side before anything is stored,
+  and fail closed when verification is unreachable.
 - **Admin console and admin APIs** for listing submissions, exporting them as
   CSV or JSON, and updating a ticket's status and admin notes.
 - **Single-file Windows build:** PyInstaller `--onefile --noconsole`, with
@@ -86,6 +92,27 @@ If a `site/` folder exists next to the exe, it is also mounted at `/` as a
 static site (`html=True`) after the routes above are registered — that is how
 the pure-frontend public website is served when it is deployed alongside the
 server.
+
+### Access split (the rule whenever this server is publicly exposed)
+
+Public means public, and the rest is gated — this split is the owner's
+standing order for any public deployment of this code:
+
+- **Public:** `/flights`, `/geopolitical`, `/threat-map` and their read
+  APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
+  endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),
+  which are rate-limited and Turnstile-gated as described above.
+- **Gated:** `/admin` and `/api/admin/*` (the app's own admin rules
+  below), `/news` and the briefing (including `/api/news-data`, which
+  carries the briefing), `/status`, and `/health`. Stored ticket and
+  contact data is reachable only through the gated admin surfaces.
+- This app deliberately does **not** serve Sentinel Command in any form.
+
+The app itself enforces the admin rules in code. The `/news`, `/status`,
+and `/health` gates are enforced at the edge of the production
+deployment (Cloudflare Access): the origin binds loopback only and is
+never exposed directly, so a deployment that skips the edge gate for
+those paths is misconfigured, not an alternative setup.
 
 Live-data JSON endpoints backing those pages:
 
@@ -118,7 +145,7 @@ Visitor ──https──▶ Cloudflare Tunnel ──▶ 127.0.0.1:8443 ──�
                                                               ├─ 4 live pages  (feeds refresh on a timer)
                                                               ├─ form APIs ──▶ SQLite (./data/sentinel-live.db)
                                                               └─ admin API    (localhost or X-Admin-Key)
-aroura boots ──▶ Task Scheduler ──▶ SentinelLive.exe (SYSTEM, hidden, auto-restart)
+host boots ──▶ Task Scheduler ──▶ SentinelLive.exe (SYSTEM, hidden, auto-restart)
                               └─▶ cloudflared tunnel (if enabled in config.yaml)
 ```
 
@@ -215,6 +242,8 @@ defaults only.
 | `tunnel.enabled` | `false` | Run the Cloudflare Tunnel alongside the server |
 | `tunnel.cloudflared_path` | `C:\Program Files\cloudflared\cloudflared.exe` | Where `cloudflared` is installed |
 | `tunnel.args` | `tunnel --url http://127.0.0.1:8443` | Arguments passed to `cloudflared` (quick tunnel by default; a named tunnel is shown as a commented example in the file) |
+| `turnstile.enabled` | `false` | Turn the Cloudflare Turnstile bot check for the three public form endpoints on or off |
+| `turnstile.secret_key` | `""` | Turnstile secret key (server-side only; the matching site key is public in the web pages). With `enabled` on but no secret set, the check is a no-op |
 | `briefing_token` | `""` | Shared secret for `POST /api/briefing`, sent as the `X-Briefing-Token` header. Empty allows local posts while the tunnel is off; with the tunnel on and no token set, ingest fails closed |
 | `admin_key` | `""` | When set, allows admin access via the `X-Admin-Key` header. See the admin rules under [Security notes](#security-notes) |
 | `cors_origins` | `[]` | Exact cross-origin allowlist. Empty = no cross-origin access. Never `"*"` — a `"*"` entry is dropped at startup (see Security notes) |
@@ -357,6 +386,15 @@ exactly as the payments service intends.
   the request must carry it in the `X-Briefing-Token` header (a `?token=`
   query value is not accepted). With no token configured and the tunnel
   enabled, ingest fails closed (`403`) instead of accepting public posts.
+* **Turnstile bot check:** with `turnstile.enabled` on and a secret key
+  set, `/api/contact`, `/api/ticket`, and `/api/newsletter` verify the
+  `cf-turnstile-response` token with Cloudflare's siteverify endpoint
+  server-side, before anything is stored. A missing or rejected token is
+  a `400`; if siteverify cannot be reached the submission fails closed
+  with a `503` — an outage never silently waves a submission through.
+  The secret and tokens are never logged. Enabled with no secret
+  configured (or disabled) is a no-op, so local installs behave exactly
+  as before.
 * **Body size caps:** POST/PATCH/PUT bodies are capped at 2 MB (5 MB for
   `/api/briefing`), checked from `Content-Length` first and again while
   streaming, so a missing or lying header cannot bypass the cap; oversized
@@ -435,10 +473,12 @@ newsletter handling, admin throttling).
   `SentinelLive.exe` and `SHA256SUMS.txt`. Publishing a GitHub release
   triggers the build workflow (`.github/workflows/build-exe.yml`), which
   builds the exe with PyInstaller and attaches it to that release.
-- This README describes what the code in this repository does. It does not
-  claim a field-verified deployment state for any particular machine: the
-  server is built to run on aroura, and that field install is the owner's
-  step to perform with the release exe and `install.ps1` above.
+- This README describes what the code in this repository does. Production
+  deployment state (2026-10-23): this code runs from source under systemd
+  on the owner's Linux server (Linode, Debian) behind the Cloudflare
+  edge, with the access split above in force. A GitHub release of this
+  repository does **not** update that deployment — the packaged Windows
+  install described above remains a separate, owner-run install form.
 
 ## License
 
