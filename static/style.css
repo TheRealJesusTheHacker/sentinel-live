@@ -24,25 +24,34 @@ a:hover { text-decoration: underline; }
 .warn { color: var(--amber); }
 .pad { padding: 1em; }
 
-/* Nav upgrade 2026-10-23: one header across the whole site — logo +
-   wordmark left, page links + Contact button right, current page marked,
-   sticky; on phones the links become a scrollable row of 44px targets. */
+/* Header (nav fix 2026-10-23): the company's face on every app page —
+   one deliberate layout at every width, never an accident of the
+   available space. Desktop: a single row, brand left / nav right, no
+   wrapping; a tightening band under 1100px keeps that row intact until
+   the mobile layout takes over. Mobile (<= 860px): exactly two rows —
+   the brand on its own row, then the nav as ONE horizontally
+   scrollable row (flex nowrap, scrollbar hidden), so the links can
+   never wrap into a ragged second row again. Contact is a filled
+   green pill at rest in both layouts. The bar is sticky at
+   z-index 1200, and Leaflet's internals are confined to their own
+   stacking context (.leaflet-container isolation below), so map
+   controls can never slide over the header. */
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 1em;
-  flex-wrap: wrap; padding: .55em 1.2em; background: rgba(0,0,0,.94);
+  flex-wrap: nowrap; padding: .55em 1.2em; background: rgba(0,0,0,.94);
   border-bottom: 1px solid var(--line);
-  position: sticky; top: 0; z-index: 1000;
+  position: sticky; top: 0; z-index: 1200;
   backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
-.brand { display: inline-flex; align-items: center; gap: .6em; color: #fff; min-height: 44px; }
+.brand { display: inline-flex; align-items: center; gap: .65em; color: #fff; min-height: 44px; flex: 0 0 auto; }
 .brand:hover { text-decoration: none; }
-.brand-logo { height: 40px; width: auto; display: block; border-radius: 6px; }
+.brand-logo { height: 44px; width: auto; display: block; border-radius: 7px; }
 .brand-name { font-weight: 800; letter-spacing: .08em; font-size: 1.05em; white-space: nowrap; }
 .brand-name em { font-style: normal; color: var(--grn); }
-.mainnav { display: flex; align-items: center; gap: .2em; }
+.mainnav { display: flex; align-items: center; gap: .3em; flex-wrap: nowrap; flex: 0 1 auto; }
 .mainnav a {
   display: inline-flex; align-items: center; min-height: 44px; padding: .35em .8em;
-  color: var(--txt); font-weight: 600; border-radius: 8px; white-space: nowrap;
+  color: var(--txt); font-weight: 600; border-radius: 8px; white-space: nowrap; flex: 0 0 auto;
   transition: color .18s ease, background-color .18s ease;
 }
 .mainnav a:hover { color: var(--grn); text-decoration: none; background: rgba(0,230,118,.08); }
@@ -51,20 +60,34 @@ a:hover { text-decoration: underline; }
   text-underline-offset: 6px; text-decoration-thickness: 2px;
 }
 .mainnav a.nav-cta {
-  background: var(--grn-dim); color: #04120a; font-weight: 700; margin-left: .7em;
+  background: var(--grn); color: #04120a; font-weight: 700; margin-left: .7em;
+  padding: .35em 1.15em; border-radius: 999px;
   transition: background-color .18s ease, transform .12s ease;
 }
-.mainnav a.nav-cta:hover { background: var(--grn); color: #04120a; text-decoration: none; }
+.mainnav a.nav-cta:hover { background: #00c163; background: color-mix(in srgb, var(--grn) 84%, #000); color: #04120a; text-decoration: none; }
 .mainnav a.nav-cta:active { transform: scale(.97); }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 880px) {
-  .topbar { flex-direction: column; align-items: stretch; gap: .25em; padding: .5em .9em .4em; }
-  .brand { min-height: 40px; }
-  .mainnav { overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; margin: 0 -.9em; padding: 0 .9em; }
+@media (max-width: 1100px) and (min-width: 861px) {
+  .topbar { gap: .6em; padding: .55em .9em; }
+  .brand-logo { height: 42px; }
+  .brand-name { font-size: 1em; }
+  .mainnav { gap: .15em; }
+  .mainnav a { padding: .35em .55em; }
+  .mainnav a.nav-cta { margin-left: .45em; padding: .35em .95em; }
+}
+@media (max-width: 860px) {
+  .topbar { flex-direction: column; align-items: stretch; gap: .35em; padding: .55em .9em .5em; }
+  .brand { min-height: 44px; }
+  .brand-logo { height: 40px; }
+  .mainnav {
+    flex-wrap: nowrap; overflow-x: auto; -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; margin: 0 -.9em; padding: .05em .9em;
+  }
   .mainnav::-webkit-scrollbar { display: none; }
-  .mainnav a { padding: .35em .65em; }
+  .mainnav a { padding: .35em .7em; }
+  .mainnav a.nav-cta { margin-left: .5em; padding: .35em 1.15em; }
 }
 
 main { max-width: 1100px; margin: 0 auto; padding: 1.2em; }
@@ -96,7 +119,10 @@ footer {
 .map { height: 440px; border: 1px solid var(--line); border-radius: 10px; background: #000; }
 .map.small { height: 320px; margin-top: 1em; }
 @media (max-width: 700px) { .map { height: 340px; } .map.small { height: 300px; } }
-.leaflet-container { background: #000; font-family: inherit; }
+/* isolation confines Leaflet's internal z-indexes (panes to 700,
+   controls to 1000) inside the map, so they can never paint over the
+   sticky header (z-index 1200) when the page scrolls. */
+.leaflet-container { background: #000; font-family: inherit; isolation: isolate; }
 /* Map loading shimmer (polish 2026-10-23): a gentle sweep behind the tiles
    until the first tile batch lands (the basemap code adds .tiles-in on the
    map's load event); loaded tiles cover it, so it never runs over a
