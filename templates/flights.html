@@ -65,17 +65,34 @@
 <script>
 // Maps fix 2026-10-23: the flight map is now ALWAYS rendered (previously it
 // existed only inside the result block, so with no live result — e.g. while
-// the AviationStack key is missing — the page had no map at all). Detailed
-// basemap standard shared with the threat and geopolitical maps.
+// the AviationStack key is missing — the page had no map at all). Basemap
+// standard shared with the threat and geopolitical maps: Esri public
+// ArcGIS services (keyless, no watermark) — CARTO's free endpoints began
+// serving "API KEY REQUIRED" watermark tiles (basemap swap 2026-10-23).
+// "Streets" (default) is the detailed layer; "Satellite" is world imagery
+// with label overlays; "Dark" is the dark gray canvas + reference overlay.
+// Esri tiles are ordered {z}/{y}/{x}, native to zoom 18; maps zoom to 19.
 const fmap = L.map('fmap', {worldCopyJump: true}).setView([30, -40], 2);
 (function basemaps(m) {
-  const attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-  const detailed = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
-  const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
-  detailed.addTo(m);
-  L.control.layers({'Detailed': detailed, 'Dark': dark}, null, {collapsed: true}).addTo(m);
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+  const OPTS = {maxZoom: 19, maxNativeZoom: 18};
+  const streets = L.tileLayer(ESRI + '/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    Object.assign({attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS User Community'}, OPTS));
+  const satellite = L.layerGroup([
+    L.tileLayer(ESRI + '/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri, Maxar, Earthstar Geographics'}, OPTS)),
+    L.tileLayer(ESRI + '/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', OPTS),
+    L.tileLayer(ESRI + '/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri'}, OPTS))
+  ]);
+  const dark = L.layerGroup([
+    L.tileLayer(ESRI + '/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS User Community'}, OPTS)),
+    L.tileLayer(ESRI + '/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', OPTS)
+  ]);
+  streets.addTo(m);
+  m.on('load', () => m.getContainer().classList.add('tiles-in'));
+  L.control.layers({'Streets': streets, 'Satellite': satellite, 'Dark': dark}, null, {collapsed: true}).addTo(m);
   L.control.scale({imperial: true}).addTo(m);
 })(fmap);
 

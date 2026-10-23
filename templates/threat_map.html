@@ -24,7 +24,7 @@
   <span><i class="dash"></i>attack path to sensor network</span>
 </div>
 <p class="dim">Circles are sized and colored by attack volume per source country (top-40 mapped attackers).
-Zoom in — the Detailed basemap shows borders, regions, cities and roads; switch to Dark in the layer control (top right).</p>
+Zoom in — the Streets basemap shows borders, regions, cities and roads; switch to Satellite or Dark in the layer control (top right).</p>
 <section class="two-col">
   <div>
     <h2>Top attacking countries</h2>
@@ -47,17 +47,34 @@ Zoom in — the Detailed basemap shows borders, regions, cities and roads; switc
 {% block scripts %}
 <script>
 const map = L.map('map', {worldCopyJump: true}).setView([28, 8], 2);
-// Maps fix 2026-10-23: detailed basemap standard shared by all three maps.
-// "Detailed" = CARTO Voyager (full road/label detail); "Dark" = CARTO dark.
-// The old layer capped zoom at 6, which hid all detail past continent level.
+// Basemap standard shared by all three maps — Esri public ArcGIS services
+// (keyless, no watermark). Basemap swap 2026-10-23: CARTO's free endpoints
+// began serving "API KEY REQUIRED" watermark tiles, so every CARTO layer
+// was replaced. "Streets" (default) is the detailed layer — borders,
+// labels, roads; "Satellite" is world imagery with transport + place
+// label overlays; "Dark" is the dark gray canvas with its reference
+// overlay. Esri tiles are ordered {z}/{y}/{x} and native to zoom 18; the
+// maps zoom to 19 and upscale the last level instead of erroring.
 (function basemaps(m) {
-  const attr = '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>';
-  const detailed = L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
-  const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
-    {attribution: attr, maxZoom: 19, subdomains: 'abcd'});
-  detailed.addTo(m);
-  L.control.layers({'Detailed': detailed, 'Dark': dark}, null, {collapsed: true}).addTo(m);
+  const ESRI = 'https://server.arcgisonline.com/ArcGIS/rest/services';
+  const OPTS = {maxZoom: 19, maxNativeZoom: 18};
+  const streets = L.tileLayer(ESRI + '/World_Street_Map/MapServer/tile/{z}/{y}/{x}',
+    Object.assign({attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS User Community'}, OPTS));
+  const satellite = L.layerGroup([
+    L.tileLayer(ESRI + '/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri, Maxar, Earthstar Geographics'}, OPTS)),
+    L.tileLayer(ESRI + '/Reference/World_Transportation/MapServer/tile/{z}/{y}/{x}', OPTS),
+    L.tileLayer(ESRI + '/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri'}, OPTS))
+  ]);
+  const dark = L.layerGroup([
+    L.tileLayer(ESRI + '/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+      Object.assign({attribution: 'Esri, HERE, Garmin, OpenStreetMap contributors, and the GIS User Community'}, OPTS)),
+    L.tileLayer(ESRI + '/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', OPTS)
+  ]);
+  streets.addTo(m);
+  m.on('load', () => m.getContainer().classList.add('tiles-in'));
+  L.control.layers({'Streets': streets, 'Satellite': satellite, 'Dark': dark}, null, {collapsed: true}).addTo(m);
   L.control.scale({imperial: true}).addTo(m);
 })(map);
 
