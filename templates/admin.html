@@ -30,7 +30,7 @@ async function load() {
   document.getElementById('csv').href = '/api/admin/export?type=' + t + '&format=csv';
   if (!d.rows.length) { document.getElementById('rows').innerHTML = '<p class="dim">No records yet.</p>'; return; }
   const cols = Object.keys(d.rows[0]);
-  let h = '<table><tr>' + cols.map(c => '<th>' + c + '</th>').join('') + '</tr>';
+  let h = '<table><tr>' + cols.map(c => '<th>' + esc(c) + '</th>').join('') + '</tr>';
   d.rows.forEach(row => { h += '<tr>' + cols.map(c => '<td>' + esc(row[c]) + '</td>').join('') + '</tr>'; });
   document.getElementById('rows').innerHTML = h + '</table>';
 }

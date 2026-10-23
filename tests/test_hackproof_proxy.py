@@ -142,9 +142,11 @@ def test_disabled_routes_do_not_exist(disabled_app):
 
 def test_disabled_existing_behavior_intact(disabled_app):
     client = TestClient(disabled_app.app, raise_server_exceptions=False)
+    # BH-2026-10-23 (H-1): /health is admin-gated in-app now (it used
+    # to rely on an edge gate that did not exist in this harness). The
+    # liveness contract moved to: gated without the key, open at /.
     resp = client.get("/health")
-    assert resp.status_code == 200
-    assert resp.json()["ok"] is True
+    assert resp.status_code == 403
     assert client.get("/").status_code == 200
 
 
@@ -326,7 +328,10 @@ def test_cors_string_star_is_not_a_wildcard(cors_star_app):
     assert cors_star_app.config["cors_origins"] == []
     client = TestClient(cors_star_app.app, raise_server_exceptions=False)
     resp = client.get("/health", headers={"Origin": "https://evil.example"})
-    assert resp.status_code == 200
+    # BH-2026-10-23 (H-1): /health is admin-gated in-app now, so the
+    # response here is the 403 — what this test pins is unchanged: no
+    # Access-Control-Allow-Origin is handed to an unlisted origin.
+    assert resp.status_code == 403
     assert "access-control-allow-origin" not in resp.headers
 
 

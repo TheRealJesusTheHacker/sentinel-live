@@ -92,7 +92,7 @@ DEFAULT_CONFIG = {
                            "upstream": "http://127.0.0.1:8787"},
     # SL6-1: default is NO cross-origin access. The old default of ["*"]
     # combined with the localhost admin bypass let any website the owner
-    # visited on aroura read /api/admin/* responses out of the local
+    # visited on the server host read /api/admin/* responses out of the local
     # server (the request genuinely comes from 127.0.0.1, and "*" let the
     # attacker's page read the reply). Same-origin pages served by this
     # server never need CORS; an externally hosted frontend must be
@@ -356,7 +356,10 @@ class _BodySizeLimitMiddleware:
         body = b'{"detail":"Request body too large."}'
         await send({"type": "http.response.start", "status": 413,
                     "headers": [(b"content-type", b"application/json"),
-                                (b"content-length", str(len(body)).encode())]})
+                                (b"content-length", str(len(body)).encode()),
+                                (b"x-content-type-options", b"nosniff"),
+                                (b"x-frame-options", b"DENY"),
+                                (b"referrer-policy", b"same-origin")]})
         await send({"type": "http.response.body", "body": body,
                     "more_body": False})
 
@@ -364,17 +367,34 @@ class _BodySizeLimitMiddleware:
         if scope["type"] == "http":
             # SL6-6: nosniff on every response — cheap insurance against
             # MIME-sniffing a stored/uploaded body into active content.
-            # (Deliberately NOT a full CSP or frame policy here: the
-            # pages load Leaflet + map tiles from CDNs and the owner may
-            # embed the live pages in the main site; those policies
-            # need their own deliberate pass, not a drive-by header.)
+            # BH-2026-10-23 (M-3): the header set grows up. The earlier
+            # "no frame policy" call assumed the owner might embed these
+            # pages in the main site — nothing embeds them (the public
+            # site LINKS to the live views), and the owner's OPSEC
+            # order supersedes: deny framing, trim the referrer our
+            # visitors leak to map/CDN third parties, pin HSTS, and
+            # switch off device APIs no page uses. A full CSP remains a
+            # separate deliberate pass (the map pages compose Leaflet /
+            # Esri / Turnstile at runtime); frame-ancestors below only
+            # stops OTHERS framing our pages and cannot break them.
+            _MANAGED_HEADERS = {
+                b"x-content-type-options": b"nosniff",
+                b"x-frame-options": b"DENY",
+                b"content-security-policy": b"frame-ancestors 'none'",
+                b"referrer-policy": b"same-origin",
+                b"strict-transport-security":
+                    b"max-age=31536000; includeSubDomains",
+                b"permissions-policy":
+                    b"camera=(), microphone=(), geolocation=(), "
+                    b"payment=(), usb=()",
+            }
             _orig_send = send
 
             async def send(message):
                 if message["type"] == "http.response.start":
                     hdrs = [(k, v) for k, v in message.get("headers", [])
-                            if k.lower() != b"x-content-type-options"]
-                    hdrs.append((b"x-content-type-options", b"nosniff"))
+                            if k.lower() not in _MANAGED_HEADERS]
+                    hdrs.extend(_MANAGED_HEADERS.items())
                     message = dict(message, headers=hdrs)
                 await _orig_send(message)
 
@@ -432,7 +452,9 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=config.get("cors_origins") or [],
     allow_methods=["GET", "POST", "PATCH", "OPTIONS"],
-    allow_headers=["*"],
+    # BH-2026-10-23 (L-3): was ["*"] — the app only ever reads these
+    # three headers cross-origin; allow exactly them.
+    allow_headers=["Content-Type", "X-Admin-Key", "X-Briefing-Token"],
 )
 # outermost: reject oversized bodies before anything else touches them
 app.add_middleware(_BodySizeLimitMiddleware)
@@ -550,10 +572,23 @@ def rate_limit(request: Request, max_hits: int = 20, window: int = 600):
     _hits[ip] = keep
 
 
+def _is_tunneled(request: Request) -> bool:
+    # BH-2026-10-23 (H-2): the tunnel.enabled config bool used to be the
+    # ONLY evidence the localhost bypass consulted — one stale bool
+    # between "local exe" and "proxied production" would have silently
+    # disabled admin auth for every proxied visitor. Treat the presence
+    # of Cloudflare's CF-Connecting-IP header as tunnel evidence too:
+    # cloudflared always sets it; a direct loopback request never
+    # carries it. Fail closed on evidence, not on config alone.
+    if bool(config.get("tunnel", {}).get("enabled")):
+        return True
+    return request.headers.get("CF-Connecting-IP") is not None
+
+
 def require_admin(request: Request):
     # When the Cloudflare Tunnel is on, all public traffic arrives as
     # localhost — so the localhost bypass must NOT apply then.
-    tunneled = bool(config.get("tunnel", {}).get("enabled"))
+    tunneled = _is_tunneled(request)
     host = request.client.host if request.client else ""
     if not tunneled and host in ("127.0.0.1", "::1", "localhost"):
         return True
@@ -604,8 +639,36 @@ async def _refresh_loop(name, minutes, coro, *args):
         except Exception as e:  # never kill the loop
             log.exception("refresh %s failed", name)
             store[name]["status"] = "error"
-            store[name]["error"] = f"{type(e).__name__}: {e}"
+            # BH-2026-10-23 (M-4): the store dict is served verbatim by
+            # the public data APIs — exception DETAIL (upstream URLs,
+            # provider messages) is recon an attacker gets for free.
+            # Class name only in public; the full exception is in the
+            # log.exception line above.
+            store[name]["error"] = type(e).__name__
         await asyncio.sleep(t * 60)
+
+
+def _sanitize_briefing_urls(data):
+    """The ingest-time _safe_url pass (BH2-2 semantics), shared.
+    BH-2026-10-23 (L-4): _load_briefing used to serve a briefing file
+    exactly as found on disk — a briefing written by any path other
+    than the ingest endpoint skipped the scheme sanitiser entirely."""
+    try:
+        from feeds import _safe_url
+        sections = data.get("sections") if isinstance(data, dict) else None
+        if not isinstance(sections, dict):
+            return
+        for sec_items in sections.values():
+            if isinstance(sec_items, list):
+                for it in sec_items:
+                    if not isinstance(it, dict) or "url" not in it:
+                        continue
+                    if isinstance(it["url"], str):
+                        it["url"] = _safe_url(it["url"])
+                    elif it["url"]:
+                        it["url"] = ""
+    except Exception:
+        pass
 
 
 def _load_briefing():
@@ -620,6 +683,7 @@ def _load_briefing():
                 log.warning("briefing file is %s, not an object; ignoring it",
                             type(data).__name__)
                 return
+            _sanitize_briefing_urls(data)
             store["briefing"] = data
             log.info("loaded briefing for %s", store["briefing"].get("date"))
     except Exception as e:
@@ -642,6 +706,13 @@ async def _startup():
     asyncio.create_task(_refresh_loop("news", fcfg["news_refresh_minutes"],
                                       feeds.fetch_news_sections,
                                       config["rss"]["news_sections"], to))
+    # BH-2026-10-23 (L-1): turnstile enabled with no secret configured
+    # silently no-ops the form bot check — say so loudly at startup
+    # instead of letting the site look protected when it is not.
+    _tscfg = config.get("turnstile") or {}
+    if _tscfg.get("enabled") and not (_tscfg.get("secret_key") or "").strip():
+        log.warning("turnstile is ENABLED but no secret_key is set — "
+                    "public form bot checks are NOT being enforced")
     log.info("Sentinel Live Server started (frozen=%s)", FROZEN)
 
 
@@ -708,6 +779,12 @@ async def flights_page(request: Request, q: str = ""):
 
 @app.get("/news", response_class=HTMLResponse)
 async def news_page(request: Request):
+    # BH-2026-10-23 (H-1): the news hub + daily briefing are owner
+    # surfaces. This gate used to exist ONLY as a Cloudflare Access
+    # rule at the edge — the app itself served the page to anyone who
+    # reached it. Enforce in-app, same key as /admin; the edge rule
+    # stays as a second layer, not the only one.
+    require_admin(request)
     return templates.TemplateResponse(request, "news.html", _ctx(
         request, news=store["news"], briefing=store["briefing"]))
 
@@ -719,7 +796,12 @@ async def admin_page(request: Request):
 
 
 @app.get("/health")
-async def health():
+async def health(request: Request):
+    # BH-2026-10-23 (H-1): feed states + precise uptime are operational
+    # detail, not public information — same in-app gate as /admin.
+    # Loopback callers (on-box checks) still pass via the localhost
+    # rule inside require_admin.
+    require_admin(request)
     now = datetime.now(timezone.utc)
     return {"ok": True, "time": now.isoformat(timespec="seconds"), "frozen": FROZEN,
             "uptime_seconds": int((now - STARTED_AT).total_seconds()) if STARTED_AT else None,
@@ -729,6 +811,9 @@ async def health():
 
 @app.get("/status", response_class=HTMLResponse)
 async def status_page(request: Request):
+    # BH-2026-10-23 (H-1): exact start time + uptime + feed states are
+    # operational detail — in-app gate, as with /news and /health.
+    require_admin(request)
     now = datetime.now(timezone.utc)
     uptime = int((now - STARTED_AT).total_seconds()) if STARTED_AT else 0
     feeds = []
@@ -755,7 +840,11 @@ async def api_geo():
 
 
 @app.get("/api/news-data")
-async def api_news():
+async def api_news(request: Request):
+    # BH-2026-10-23 (H-1): this endpoint returns the FULL briefing
+    # object — it was the one gated dataset reachable with no in-app
+    # authentication at all. Same gate as /news.
+    require_admin(request)
     return JSONResponse({"news": store["news"], "briefing": store["briefing"]})
 
 
@@ -851,6 +940,19 @@ async def _verify_turnstile(request: Request, body: dict):
         raise HTTPException(
             400, "Bot check failed — please try again, or contact us "
                  "by email or phone.")
+    # BH-2026-10-23 (L-1): a token minted for a DIFFERENT site's widget
+    # must not pass here — when Cloudflare reports the hostname the
+    # challenge was solved on, assert it is one of ours (production
+    # domains, or loopback for local installs).
+    _solved_on = result.get("hostname")
+    if isinstance(_solved_on, str) and _solved_on and _solved_on not in (
+            "sentinelsafeguard.net", "www.sentinelsafeguard.net",
+            "localhost", "127.0.0.1"):
+        log.info("turnstile hostname mismatch (path=%s host=%s)",
+                 request.url.path, _solved_on)
+        raise HTTPException(
+            400, "Bot check failed — please try again, or contact us "
+                 "by email or phone.")
 
 
 @app.post("/api/contact")
@@ -933,7 +1035,7 @@ async def api_briefing(request: Request):
     # (20/10min/IP) still caps token guessing and write spam.
     rate_limit(request)
     token = config.get("briefing_token") or ""
-    if not token and config.get("tunnel", {}).get("enabled"):
+    if not token and _is_tunneled(request):
         # SL5-5: no token configured + the public tunnel on = anyone on
         # the internet could inject briefing content onto /news. Fail
         # closed in exactly that configuration; the tokenless setup
@@ -959,25 +1061,7 @@ async def api_briefing(request: Request):
     if not isinstance(body, dict) or not isinstance(body.get("sections"), dict):
         raise HTTPException(400, 'Body must be {"date": "...", "sections": {...}}.')
     # sanitize briefing URLs (defense against javascript: scheme XSS)
-    try:
-        from feeds import _safe_url
-        for sec_items in body["sections"].values():
-            if isinstance(sec_items, list):
-                for it in sec_items:
-                    if not isinstance(it, dict) or "url" not in it:
-                        continue
-                    # BH2-2: _safe_url assumes a string. A non-string
-                    # url (number/object) used to raise here, and the
-                    # blanket except below then skipped sanitizing the
-                    # REST of the payload — javascript: URLs included.
-                    # Blank non-strings instead, and never let one bad
-                    # item disarm the pass for the others.
-                    if isinstance(it["url"], str):
-                        it["url"] = _safe_url(it["url"])
-                    elif it["url"]:
-                        it["url"] = ""
-    except Exception:
-        pass
+    _sanitize_briefing_urls(body)
     body["ingested_at"] = _utcnow()
     # Write via a temp file + atomic replace: a crash or a concurrent
     # ingest mid-write must never leave a torn briefing.json behind
@@ -1241,4 +1325,7 @@ if __name__ == "__main__":
     import uvicorn
     srv = config["server"]
     log.info("starting uvicorn on %s:%s", srv["host"], srv["port"])
-    uvicorn.run(app, host=srv["host"], port=int(srv["port"]), log_level="warning")
+    # BH-2026-10-23 (L-5): don't volunteer the framework banner —
+    # server_header=False drops uvicorn's "Server: uvicorn" line.
+    uvicorn.run(app, host=srv["host"], port=int(srv["port"]), log_level="warning",
+                server_header=False)

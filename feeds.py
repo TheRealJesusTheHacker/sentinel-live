@@ -5,6 +5,7 @@ on failure they return an error status the pages render honestly.
 """
 import asyncio
 import ipaddress
+import time
 import logging
 import re
 from collections import Counter
@@ -97,6 +98,10 @@ async def _geolocate_ips(client, ips, timeout):
     if not batch:
         return out
     try:
+        # Plain HTTP is a documented free-tier constraint: ip-api
+        # serves HTTPS only on its Pro plan (BH-2026-10-23, M-2). The
+        # batch contains only third-party attacker IPs already public
+        # via DShield — no key and no visitor data crosses this call.
         data = await _post(client, "http://ip-api.com/batch", batch, timeout)
         for g in data or []:
             if isinstance(g, dict) and g.get("status") == "success" \
@@ -542,12 +547,39 @@ async def fetch_news_sections(sections, timeout=20):
 
 
 # ------------------------------------------------------------------ flights
+# BH-2026-10-23 (M-1): flight-number shape + a short result cache.
+# Every uncached lookup spends from the free plan's 100 requests/month;
+# before this, ANY alphanumeric string a visitor typed was forwarded
+# to the provider, so junk queries burned real quota.
+_FLIGHT_NUMBER_RE = re.compile(r"^[A-Z][A-Z0-9]{1,2}\d{1,4}[A-Z]?$")
+_FLIGHT_CACHE = {}
+_FLIGHT_CACHE_TTL = 600  # seconds
+
+
 async def lookup_flight(number, api_key, timeout=20):
     """AviationStack lookup. Returns (result_dict, error_str)."""
     num = re.sub(r"[^A-Za-z0-9]", "", number or "").upper()
-    if not num:
+    if not num or len(num) > 10 or not _FLIGHT_NUMBER_RE.fullmatch(num):
         return None, "Enter a flight number (e.g. AA100, UAL512, SWA204)."
-    url = "http://api.aviationstack.com/v1/flights"
+    now = time.time()
+    hit = _FLIGHT_CACHE.get(num)
+    if hit and now - hit[0] < _FLIGHT_CACHE_TTL:
+        return hit[1], hit[2]
+    result, error = await _lookup_flight_provider(num, api_key, timeout)
+    if len(_FLIGHT_CACHE) > 512:
+        _FLIGHT_CACHE.clear()
+    _FLIGHT_CACHE[num] = (now, result, error)
+    return result, error
+
+
+async def _lookup_flight_provider(num, api_key, timeout=20):
+    """One uncached AviationStack call for an already-validated
+    designator. Returns (result_dict, error_str)."""
+    # HTTPS: APILayer's current docs offer HTTPS on every plan. If a
+    # plan ever rejects it, the provider error surfaces below as a
+    # generic "no live data" and this URL goes back to http:// with the
+    # constraint noted — the key is free-tier, quota-capped, rotatable.
+    url = "https://api.aviationstack.com/v1/flights"
     try:
         async with _make_client() as client:
             r = await client.get(url, params={"access_key": api_key,
@@ -575,10 +607,14 @@ async def lookup_flight(number, api_key, timeout=20):
     if not isinstance(flights, list):
         flights = []
     if not flights:
+        # BH-2026-10-23: never render the provider's own error text on
+        # the public page — it is an upstream-controlled string. Log it
+        # server-side; the visitor gets a fixed message.
         err = payload.get("error")
-        msg = err.get("message") if isinstance(err, dict) else None
-        return None, (msg if isinstance(msg, str) and msg
-                      else f"No live data for {num} right now.")
+        if isinstance(err, dict):
+            log.warning("flight lookup for %s: provider error %s: %s",
+                        num, err.get("code"), err.get("message"))
+        return None, f"No live data for {num} right now."
     f = flights[0]
     if not isinstance(f, dict):
         return None, f"No live data for {num} right now."

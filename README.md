@@ -108,11 +108,11 @@ standing order for any public deployment of this code:
   contact data is reachable only through the gated admin surfaces.
 - This app deliberately does **not** serve Sentinel Command in any form.
 
-The app itself enforces the admin rules in code. The `/news`, `/status`,
-and `/health` gates are enforced at the edge of the production
-deployment (Cloudflare Access): the origin binds loopback only and is
-never exposed directly, so a deployment that skips the edge gate for
-those paths is misconfigured, not an alternative setup.
+The app itself enforces the gated side in code — gated routes check
+the same admin rule as `/admin` before serving anything — and the
+production deployment adds an edge access layer on top. The layering
+is deliberate: no single control is the only thing standing between
+the internet and the gated surfaces.
 
 Live-data JSON endpoints backing those pages:
 
@@ -120,7 +120,7 @@ Live-data JSON endpoints backing those pages:
 |---|---|
 | `GET /api/threat-data` | Current threat-map data (the in-memory threat store) |
 | `GET /api/geo-data` | Current geopolitical data |
-| `GET /api/news-data` | Current news sections and the daily briefing |
+| `GET /api/news-data` | Current news sections and the daily briefing (admin-gated — it carries the briefing) |
 
 ## Website backend APIs (JSON, stored in embedded SQLite)
 
@@ -145,7 +145,7 @@ Visitor ──https──▶ Cloudflare Tunnel ──▶ 127.0.0.1:8443 ──�
                                                               ├─ 4 live pages  (feeds refresh on a timer)
                                                               ├─ form APIs ──▶ SQLite (./data/sentinel-live.db)
                                                               └─ admin API    (localhost or X-Admin-Key)
-host boots ──▶ Task Scheduler ──▶ SentinelLive.exe (SYSTEM, hidden, auto-restart)
+host boots ──▶ Task Scheduler ──▶ SentinelLive.exe (auto-start)
                               └─▶ cloudflared tunnel (if enabled in config.yaml)
 ```
 
@@ -243,8 +243,8 @@ defaults only.
 | `tunnel.cloudflared_path` | `C:\Program Files\cloudflared\cloudflared.exe` | Where `cloudflared` is installed |
 | `tunnel.args` | `tunnel --url http://127.0.0.1:8443` | Arguments passed to `cloudflared` (quick tunnel by default; a named tunnel is shown as a commented example in the file) |
 | `turnstile.enabled` | `false` | Turn the Cloudflare Turnstile bot check for the three public form endpoints on or off |
-| `turnstile.secret_key` | `""` | Turnstile secret key (server-side only; the matching site key is public in the web pages). With `enabled` on but no secret set, the check is a no-op |
-| `briefing_token` | `""` | Shared secret for `POST /api/briefing`, sent as the `X-Briefing-Token` header. Empty allows local posts while the tunnel is off; with the tunnel on and no token set, ingest fails closed |
+| `turnstile.secret_key` | `""` | Turnstile secret key (server-side only; the matching site key is public in the web pages). With `enabled` on but no secret set, the check stays off and a warning is logged at startup |
+| `briefing_token` | `""` | Shared secret for `POST /api/briefing`, sent as the `X-Briefing-Token` header |
 | `admin_key` | `""` | When set, allows admin access via the `X-Admin-Key` header. See the admin rules under [Security notes](#security-notes) |
 | `cors_origins` | `[]` | Exact cross-origin allowlist. Empty = no cross-origin access. Never `"*"` — a `"*"` entry is dropped at startup (see Security notes) |
 | `hackproof_payments.enabled` | `false` | Turn the HackProof payments pass-through on or off |
@@ -264,7 +264,9 @@ Invoke-RestMethod http://127.0.0.1:8443/health
 
 returns JSON with `ok`, `time`, `frozen`, `uptime_seconds`, and a `feeds`
 object giving each feed's last `updated` time and `status`. The same
-information in a page is at `http://127.0.0.1:8443/status`.
+information in a page is at `http://127.0.0.1:8443/status`. Both are
+admin-gated (see the access split): from the machine itself they open
+directly; from anywhere else they need the admin key.
 
 ### Admin
 
@@ -309,13 +311,9 @@ To turn it on:
 
 1. **Set the payments service up on the same machine first**, following
    its own README ("Host setup" in the HackProof repo's
-   `payments/README.md`): the seller key store must exist
-   (`~/.hackproof`), copy `payments/config.example.json` to
-   `~/.hackproof-payments/config.json` with your SMTP settings and a
-   long random admin token (keep that file private), run its `--check`
-   and `--selftest`, and start it at boot next to Sentinel Live (its
-   README has the Task Scheduler recipe). It listens only on
-   `127.0.0.1:8787` — leave it that way.
+   `payments/README.md`) — its configuration, key store, and startup
+   recipe live there, not here. It listens on loopback only — leave
+   it that way.
 2. **Flip one switch** in this server's `config.yaml`:
    `hackproof_payments.enabled: true` (the `upstream` next to it is
    already the right address). If your buy page is hosted on a
@@ -324,11 +322,11 @@ To turn it on:
 3. **Restart Sentinel Live.** Exactly these three routes now work at this
    server's address, answered by the payments service:
 
-   | Proxied route | Per-IP throttle (10 min window) |
+   | Proxied route | Notes |
    |---|---|
-   | `POST /api/orders` | 10 |
-   | `GET /api/orders/{id}` | 300 (a checkout page polls this while a payment confirms) |
-   | `POST /api/certificates` | 10 |
+   | `POST /api/orders` | Rate-limited per IP |
+   | `GET /api/orders/{id}` | Generous limit (a checkout page polls this while a payment confirms) |
+   | `POST /api/certificates` | Rate-limited per IP |
 
 4. **Point the storefront at this server**: the site's
    `PAYMENTS_API_BASE` and the app's `HACKPROOF_SERVICE_BASE_URL` both
@@ -370,16 +368,15 @@ exactly as the payments service intends.
   `"*"`, any website the owner visited on the server machine could read
   `/api/admin/*` responses out of the local server.
 * **Admin rules.** The admin page and admin APIs allow a request from
-  localhost only while the Cloudflare Tunnel is disabled — tunneled traffic
-  also arrives as localhost, so the bypass is switched off then — or the
-  `X-Admin-Key` header matching `admin_key` in `config.yaml`, compared in
-  constant time. Failed admin attempts are counted per IP and throttled:
-  more than 20 failures in 10 minutes returns `429`; denials are logged
-  with the real client IP and path.
-* **Rate limits (per client IP, 10-minute windows, `429` on excess):**
-  the form endpoints and flight lookups allow 20 hits, tickets and the
-  proxied order/certificate posts allow 10, and proxied order-status reads
-  allow 300. Behind the tunnel, the client IP is taken only from
+  localhost only while the request shows no sign of having been
+  proxied — proxied traffic also arrives as localhost, so the bypass
+  is switched off then — or the `X-Admin-Key` header matching
+  `admin_key` in `config.yaml`, compared in constant time. Failed
+  admin attempts are counted per IP, throttled, and logged with the
+  real client IP and path.
+* **Rate limits:** the public form endpoints, flight lookups, and the
+  proxied payments routes are rate-limited per client IP and return
+  `429` on excess. Behind the tunnel, the client IP is taken only from
   Cloudflare's `CF-Connecting-IP` header — `X-Forwarded-For` is never
   trusted as a fallback, because it is attacker-controlled.
 * **Briefing ingest** (`POST /api/briefing`): when `briefing_token` is set,
@@ -395,10 +392,10 @@ exactly as the payments service intends.
   The secret and tokens are never logged. Enabled with no secret
   configured (or disabled) is a no-op, so local installs behave exactly
   as before.
-* **Body size caps:** POST/PATCH/PUT bodies are capped at 2 MB (5 MB for
-  `/api/briefing`), checked from `Content-Length` first and again while
-  streaming, so a missing or lying header cannot bypass the cap; oversized
-  requests get `413`.
+* **Body size caps:** POST/PATCH/PUT bodies are capped per endpoint,
+  checked from `Content-Length` first and again while streaming, so a
+  missing or lying header cannot bypass the cap; oversized requests
+  get `413`.
 * **OpenAPI surface is off:** the FastAPI app is created with `docs_url`,
   `redoc_url`, and `openapi_url` all disabled.
 * API keys are read from `config.yaml` next to the exe; no keys are
@@ -437,10 +434,11 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is two files — `tests/test_hackproof_proxy.py` (22 tests) and
-`tests/test_turnstile.py` (7 tests) — with **29 tests** in total, verified
-by collection and a full run from a fresh snapshot of this repository on
-2026-10-23 (`29 tests collected`, and `29 passed`).
+The suite is four files — `tests/test_hackproof_proxy.py` (22 tests),
+`tests/test_turnstile.py` (7 tests), `tests/test_front_door.py`
+(4 tests), and `tests/test_bughunt_2026_10_23.py` (17 tests) — with
+**50 tests** in total, verified by collection and a full run from a
+fresh snapshot of this repository on 2026-10-23 (`50 passed`).
 It builds the app against fake payments upstreams and covers, among other
 things:
 
@@ -461,11 +459,20 @@ things:
   disabled (or enabled with no secret) is a no-op, a missing or invalid
   token is rejected when enabled, a valid token is accepted, and a
   siteverify outage fails closed.
+- The 2026-10-23 bug-hunt pins: the gated surfaces (`/news`, `/status`,
+  `/health`, `/api/news-data`) require the admin rule in-app while the
+  public surfaces stay public; a `CF-Connecting-IP` header defeats the
+  localhost bypass; the baseline security headers ride on pages and
+  APIs; feed refresh errors surface as a class name only; flight
+  numbers are shape-validated and cached before any provider call;
+  and a Turnstile token solved on another site's widget is rejected.
 
-There is no test suite for the pages or feeds in this repository; those
-areas are exercised manually via `run.bat`. The form APIs are covered
-only where the tests above touch them (Turnstile gating, CSV export,
-newsletter handling, admin throttling).
+Page coverage is partial: routing, the in-app gates, response
+headers, and flight-number validation are pinned by the tests above;
+the map pages' rendering is exercised manually via `run.bat`. The
+form APIs are covered only where the tests above touch them
+(Turnstile gating, CSV export, newsletter handling, admin
+throttling).
 
 ## Status
 
@@ -473,12 +480,11 @@ newsletter handling, admin throttling).
   `SentinelLive.exe` and `SHA256SUMS.txt`. Publishing a GitHub release
   triggers the build workflow (`.github/workflows/build-exe.yml`), which
   builds the exe with PyInstaller and attaches it to that release.
-- This README describes what the code in this repository does. Production
-  deployment state (2026-10-23): this code runs from source under systemd
-  on the owner's Linux server (Linode, Debian) behind the Cloudflare
-  edge, with the access split above in force. A GitHub release of this
-  repository does **not** update that deployment — the packaged Windows
-  install described above remains a separate, owner-run install form.
+- This README describes what the code in this repository does. The
+  code is deployed in production behind the Cloudflare edge, with the
+  access split above in force. A GitHub release of this repository
+  does **not** update that deployment — the packaged Windows install
+  described above remains a separate, owner-run install form.
 
 ## License
 

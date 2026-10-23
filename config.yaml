@@ -31,7 +31,7 @@ tunnel:
   # Quick tunnel (no account needed, random URL):
   args: "tunnel --url http://127.0.0.1:8443"
   # Named tunnel example (needs cloudflared login + DNS route):
-  # args: "tunnel --hostname live.sentinelsafeguard.com --url http://127.0.0.1:8443"
+  # args: "tunnel --hostname live.example.com --url http://127.0.0.1:8443"
 
 # Cloudflare Turnstile bot check for the public forms (optional).
 # Default OFF: while disabled — or enabled with no secret key set —

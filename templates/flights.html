@@ -11,13 +11,8 @@
 </section>
 {% if key_missing %}
 <section class="notice">
-  <h2>API key required</h2>
-  <p>The flight tracker needs an AviationStack API key before it can show live data.</p>
-  <ol>
-    <li>Get a free key at <a href="https://aviationstack.com/" target="_blank" rel="noopener">aviationstack.com</a> (free tier: 100 lookups/month).</li>
-    <li>Open <code>config.yaml</code> next to <code>SentinelLive.exe</code> and paste the key into <code>flight_api.api_key</code>.</li>
-    <li>Restart the SentinelLiveServer scheduled task (or reboot).</li>
-  </ol>
+  <h2>Flight data unavailable</h2>
+  <p>Live flight data is temporarily unavailable. Please check back soon.</p>
 </section>
 {% endif %}
 <form class="searchbar" method="get" action="/flights">
