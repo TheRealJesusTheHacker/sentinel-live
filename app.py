@@ -17,12 +17,20 @@ import csv
 import io
 import json
 import logging
+import os
 import re
+import secrets
 import sqlite3
 import sys
+import threading
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+
+try:
+    from zoneinfo import ZoneInfo
+except Exception:  # pragma: no cover — zoneinfo is stdlib on py3.9+
+    ZoneInfo = None
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import quote, urlparse
@@ -445,6 +453,180 @@ class _BodySizeLimitMiddleware:
         await self.app(scope, receive_replay, send)
 
 
+# ------------------------------------------------------------------ visitor log
+# PV-2026-10-23: public-visitor logging for the owner's Activity
+# console. One row per GET of a public HTML page that answers 200 —
+# the raw material for "all visitors and their activity" on the
+# public side. Deliberately NOT logged: /api/*, the gated surfaces
+# (/admin, /news, /status, /health), /internal/*, static assets,
+# non-GET requests, and non-200 responses.
+VISITOR_RETENTION_DAYS = 90  # owner-adjustable; pruned daily
+_VISITOR_TABLE_SQL = (
+    "CREATE TABLE IF NOT EXISTS visitor_log("
+    "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+    " ts INTEGER NOT NULL, ip TEXT NOT NULL DEFAULT '',"
+    " ua TEXT NOT NULL DEFAULT '', path TEXT NOT NULL DEFAULT '',"
+    " referrer TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '',"
+    " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
+_VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
+                         "/flights", "/report-issue", "/ticket"}
+_VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
+                       "python-requests", "headless", "uptime")
+_visitor_prune_state = {"last": 0.0}
+
+try:
+    _CHICAGO_TZ = ZoneInfo("America/Chicago") if ZoneInfo else timezone.utc
+except Exception:
+    _CHICAGO_TZ = timezone.utc
+
+
+def _visitor_norm_path(raw: str) -> str:
+    """Collapse the variants of one page to a single label: the
+    homepage answers at / and /index.html, and the static pages at
+    /report-issue and /report-issue/ — one row label each."""
+    p = raw or "/"
+    if p == "/index.html":
+        return "/"
+    if len(p) > 1 and p.endswith("/"):
+        p = p.rstrip("/") or "/"
+    return p
+
+
+def _chicago_day_start_epoch(days_ago: int = 0) -> int:
+    """Epoch seconds of local midnight (America/Chicago) for today
+    or an earlier day — "today" in the console is the owner's day,
+    not UTC's. Wall-clock arithmetic keeps this DST-correct."""
+    now_local = datetime.now(timezone.utc).astimezone(_CHICAGO_TZ)
+    midnight = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    return int((midnight - timedelta(days=days_ago)).timestamp())
+
+
+def _visitor_insert_sync(row):
+    """One visitor row, written from a daemon thread AFTER the
+    response has fully left, so logging can never delay or break
+    page serving. Tradeoff, stated plainly: a process crash in the
+    milliseconds between serving and the thread's commit can lose
+    that one row — acceptable for analytics, and the reason this is
+    a fire-and-forget thread instead of a buffered queue with its
+    own failure modes. Any error drops the row silently."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=5)
+        try:
+            conn.execute(_VISITOR_TABLE_SQL)
+            conn.execute(
+                "INSERT INTO visitor_log(ts,ip,ua,path,referrer,country,"
+                "visit_id,bot) VALUES(?,?,?,?,?,?,?,?)", row)
+            # Piggyback the retention prune at most once a day.
+            now = time.monotonic()
+            if now - _visitor_prune_state["last"] >= 86400:
+                _visitor_prune_state["last"] = now
+                cutoff = int(time.time()) - VISITOR_RETENTION_DAYS * 86400
+                cur = conn.execute("DELETE FROM visitor_log WHERE ts < ?",
+                                   (cutoff,))
+                if cur.rowcount:
+                    log.info("visitor log: pruned %d rows older than %d "
+                             "days", cur.rowcount, VISITOR_RETENTION_DAYS)
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception:
+        pass  # a logging failure must never surface to a visitor
+
+
+def _prune_visitor_log_sync() -> int:
+    """Startup prune of rows past the retention window."""
+    try:
+        conn = sqlite3.connect(DB_PATH, timeout=10)
+        try:
+            conn.execute(_VISITOR_TABLE_SQL)
+            cutoff = int(time.time()) - VISITOR_RETENTION_DAYS * 86400
+            cur = conn.execute("DELETE FROM visitor_log WHERE ts < ?",
+                               (cutoff,))
+            n = cur.rowcount
+            conn.commit()
+        finally:
+            conn.close()
+        if n:
+            log.info("visitor log: pruned %d rows older than %d days "
+                     "at startup", n, VISITOR_RETENTION_DAYS)
+        return n
+    except Exception:
+        return 0
+
+
+class _VisitorLogMiddleware:
+    """Pure-ASGI visitor logger. Lives at the ASGI layer because the
+    public pages are split between explicit routes (/, /operations,
+    the three live views) and the trailing StaticFiles mount
+    (/report-issue, /ticket, /index.html) — this is the one hook that
+    sees every public page exactly once, with its final status."""
+
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http" or scope.get("method") != "GET":
+            await self.app(scope, receive, send)
+            return
+        path = _visitor_norm_path(scope.get("path", ""))
+        if path not in _VISITOR_PUBLIC_PATHS:
+            await self.app(scope, receive, send)
+            return
+        headers = {k.decode("latin-1").lower(): v.decode("latin-1")
+                   for k, v in scope.get("headers", [])}
+        # Visit grouping: the svid first-party cookie. A valid one
+        # (128-bit hex we issued) groups the visit; anything else is
+        # replaced — a visitor-supplied value is never trusted into
+        # the log as-is.
+        visit_id = ""
+        for part in headers.get("cookie", "").split(";"):
+            name, _, val = part.strip().partition("=")
+            if name == "svid":
+                visit_id = val.strip()
+        if not re.fullmatch(r"[0-9a-f]{32}", visit_id or ""):
+            visit_id = secrets.token_hex(16)
+        # The client IP exactly as the rest of the app resolves it
+        # (_real_ip semantics): CF-Connecting-IP behind the tunnel,
+        # the TCP peer otherwise.
+        peer = scope.get("client")[0] if scope.get("client") else "?"
+        if config.get("tunnel", {}).get("enabled"):
+            ip = headers.get("cf-connecting-ip") or peer
+        else:
+            ip = peer
+        ua = headers.get("user-agent", "")
+        ua_l = ua.lower()
+        row = (int(time.time()), ip[:64], ua[:512], path,
+               headers.get("referer", "")[:512],
+               headers.get("cf-ipcountry", "")[:8], visit_id,
+               1 if any(t in ua_l for t in _VISITOR_BOT_TOKENS) else 0)
+        state = {"status": None, "logged": False}
+
+        async def send_wrap(message):
+            if message["type"] == "http.response.start":
+                state["status"] = message.get("status")
+                if message.get("status") == 200:
+                    hdrs = list(message.get("headers", []))
+                    # 30-minute rolling visit window: the cookie is
+                    # re-issued (same value, fresh expiry) on every
+                    # logged page, so a visit is a burst of activity
+                    # no more than 30 idle minutes apart.
+                    hdrs.append(
+                        (b"set-cookie",
+                         f"svid={visit_id}; Path=/; Max-Age=1800; "
+                         "HttpOnly; Secure; SameSite=Lax".encode("latin-1")))
+                    message = dict(message, headers=hdrs)
+            await send(message)
+            if state["status"] == 200 and not state["logged"] and (
+                    message["type"] == "http.response.pathsend"
+                    or (message["type"] == "http.response.body"
+                        and not message.get("more_body"))):
+                state["logged"] = True
+                threading.Thread(target=_visitor_insert_sync, args=(row,),
+                                 daemon=True).start()
+
+        await self.app(scope, receive, send_wrap)
+
+
 # ------------------------------------------------------------------ app
 app = FastAPI(title="Sentinel Safeguard Server", docs_url=None, redoc_url=None,
               openapi_url=None)
@@ -458,6 +640,9 @@ app.add_middleware(
 )
 # outermost: reject oversized bodies before anything else touches them
 app.add_middleware(_BodySizeLimitMiddleware)
+# PV-2026-10-23: visitor logging wraps everything (added last, so it
+# runs outermost and sees each response's final status + headers).
+app.add_middleware(_VisitorLogMiddleware)
 app.mount("/static", StaticFiles(directory=res_dir("static")), name="static")
 templates = Jinja2Templates(directory=str(res_dir("templates")))
 
@@ -489,6 +674,13 @@ CREATE TABLE IF NOT EXISTS newsletter(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL, email TEXT NOT NULL UNIQUE,
   name TEXT DEFAULT '', ip TEXT DEFAULT '');
+CREATE TABLE IF NOT EXISTS visitor_log(
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  ts INTEGER NOT NULL, ip TEXT NOT NULL DEFAULT '',
+  ua TEXT NOT NULL DEFAULT '', path TEXT NOT NULL DEFAULT '',
+  referrer TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '',
+  visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS idx_visitor_log_ts ON visitor_log(ts);
 """
 
 
@@ -695,6 +887,9 @@ async def _startup():
     global STARTED_AT
     STARTED_AT = datetime.now(timezone.utc)
     await init_db()
+    # PV-2026-10-23: visitor-log retention prune (also piggybacked
+    # on writes, at most once a day — see _visitor_insert_sync).
+    await asyncio.to_thread(_prune_visitor_log_sync)
     _load_briefing()
     fcfg, to = config["feeds"], config["feeds"]["request_timeout_seconds"]
     asyncio.create_task(_refresh_loop("threat", fcfg["threat_refresh_minutes"],
@@ -846,6 +1041,118 @@ async def api_news(request: Request):
     # authentication at all. Same gate as /news.
     require_admin(request)
     return JSONResponse({"news": store["news"], "briefing": store["briefing"]})
+
+
+# ------------------------------------------------------------------ internal visitors
+# PV-2026-10-23: the visitor feed for the Sentinel Command Activity
+# console. This endpoint does not exist as far as the public internet
+# is concerned: three independent gates, and EVERY failure is the
+# same plain 404, so nothing about it can be probed from outside.
+_INTERNAL_TOKEN_DEFAULT_PATH = "/opt/sentinel-live/internal_token.txt"
+
+
+def _internal_token() -> str:
+    """The shared token for /internal/visitors, read from a box-local
+    file on every call (rotation needs no restart). The path comes
+    from SENTINEL_LIVE_INTERNAL_TOKEN_PATH or the production
+    default; a missing/unreadable file means the feature is OFF and
+    the endpoint answers 404 to everything, the app unaffected."""
+    path = os.environ.get("SENTINEL_LIVE_INTERNAL_TOKEN_PATH") \
+        or _INTERNAL_TOKEN_DEFAULT_PATH
+    try:
+        return Path(path).read_text(encoding="utf-8").strip()
+    except Exception:
+        return ""
+
+
+def _visitors_gate(request: Request):
+    def _nope():
+        raise HTTPException(404, "Not found.")
+    # (a) The TCP peer must be loopback — the console calls over SSH
+    # or from the same box; tunnel traffic arrives AS loopback too,
+    # which is what gate (b) exists for.
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        _nope()
+    # (b) Cloudflare Tunnel traffic ALWAYS carries CF-Connecting-IP
+    # (cloudflared sets it); a genuine box-local call never does.
+    # Its presence means the request came in from the internet.
+    if request.headers.get("CF-Connecting-IP") is not None:
+        _nope()
+    # (c) The token itself, constant-time compared.
+    expected = _internal_token()
+    if not expected:
+        _nope()
+    got = request.headers.get("X-Internal-Token", "")
+    try:
+        ok = hmac.compare_digest(got, expected)
+    except TypeError:
+        ok = False
+    if not ok:
+        _nope()
+
+
+@app.get("/internal/visitors")
+async def internal_visitors(request: Request, days: int = 2,
+                            limit: int = 200):
+    _visitors_gate(request)
+    days = max(1, min(int(days), 90))
+    limit = max(1, min(int(limit), 1000))
+    today_start = _chicago_day_start_epoch(0)
+    window_start = _chicago_day_start_epoch(days - 1)
+    async with await _db() as db:
+        await db.execute(_VISITOR_TABLE_SQL)
+        await db.execute(
+            "CREATE INDEX IF NOT EXISTS idx_visitor_log_ts "
+            "ON visitor_log(ts)")
+        async with db.execute(
+                "SELECT COUNT(*), COUNT(DISTINCT ip), "
+                "COUNT(DISTINCT visit_id) FROM visitor_log "
+                "WHERE ts >= ?", (today_start,)) as cur:
+            views_today, ips_today, visits_today = await cur.fetchone()
+
+        async def _top(sql, key):
+            async with db.execute(sql, (window_start,)) as cur:
+                return [{key: r[0], "views": r[1]}
+                        for r in await cur.fetchall()]
+
+        top_pages = await _top(
+            "SELECT path, COUNT(*) AS v FROM visitor_log "
+            "WHERE ts >= ? GROUP BY path ORDER BY v DESC, path ASC "
+            "LIMIT 10", "path")
+        top_refs = await _top(
+            "SELECT referrer, COUNT(*) AS v FROM visitor_log "
+            "WHERE ts >= ? GROUP BY referrer ORDER BY v DESC, "
+            "referrer ASC LIMIT 10", "referrer")
+        # An empty referrer IS a direct visit — name it in the
+        # summary (the feed keeps the raw stored value).
+        for r in top_refs:
+            if not r["referrer"]:
+                r["referrer"] = "direct"
+        top_countries = await _top(
+            "SELECT country, COUNT(*) AS v FROM visitor_log "
+            "WHERE ts >= ? AND country != '' GROUP BY country "
+            "ORDER BY v DESC, country ASC LIMIT 10", "country")
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+                "SELECT ts, ip, ua, path, referrer, country, visit_id, "
+                "bot FROM visitor_log WHERE ts >= ? "
+                "ORDER BY ts DESC, id DESC LIMIT ?",
+                (window_start, limit)) as cur:
+            feed = [{
+                "ts": datetime.fromtimestamp(
+                    r["ts"], timezone.utc).isoformat(timespec="seconds"),
+                "ip": r["ip"], "ua": r["ua"], "path": r["path"],
+                "referrer": r["referrer"], "country": r["country"],
+                "visitId": r["visit_id"], "bot": bool(r["bot"]),
+            } for r in await cur.fetchall()]
+    return {"summary": {"viewsToday": views_today,
+                        "uniqueIpsToday": ips_today,
+                        "visitsToday": visits_today,
+                        "topPages": top_pages,
+                        "topReferrers": top_refs,
+                        "topCountries": top_countries},
+            "feed": feed}
 
 
 # ------------------------------------------------------------------ website backend APIs
