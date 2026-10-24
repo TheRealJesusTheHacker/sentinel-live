@@ -1093,11 +1093,24 @@ def _visitors_gate(request: Request):
 
 
 @app.get("/internal/visitors")
-async def internal_visitors(request: Request, days: int = 2,
-                            limit: int = 200):
+async def internal_visitors(request: Request, days: str = "2",
+                            limit: str = "200"):
+    # SWEEP5-2026-10-24: days/limit arrive as raw strings and are
+    # parsed only AFTER the gate. As typed int parameters, FastAPI
+    # validated them before this handler ran, so a malformed value
+    # (days=abc) answered 422 while every gate failure answers the
+    # same plain 404 — an oracle that distinguished this endpoint
+    # from a nonexistent path, against the stealth design above.
+    # Gate first: outsiders get 404 for every malformed request;
+    # a gated caller with a bad value still gets a plain 400.
     _visitors_gate(request)
-    days = max(1, min(int(days), 90))
-    limit = max(1, min(int(limit), 1000))
+    try:
+        days = int(days)
+        limit = int(limit)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "days and limit must be integers.")
+    days = max(1, min(days, 90))
+    limit = max(1, min(limit, 1000))
     today_start = _chicago_day_start_epoch(0)
     window_start = _chicago_day_start_epoch(days - 1)
     async with await _db() as db:
@@ -1402,6 +1415,13 @@ async def admin_submissions(request: Request, type: str = "tickets",
     require_admin(request)
     table = _admin_table(type)
     limit = max(1, min(limit, 500))
+    # SWEEP5-2026-10-24: offset was bound raw while limit was
+    # clamped — an offset past SQLite's INTEGER range (2**63-1)
+    # raised OverflowError on binding and surfaced as a 500.
+    # Clamp into the bindable range; any offset past the row
+    # count still returns an empty page, exactly as before, and
+    # a negative offset keeps SQLite's treated-as-zero result.
+    offset = max(0, min(offset, 9223372036854775807))
     async with await _db() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(
@@ -1417,6 +1437,14 @@ async def admin_submissions(request: Request, type: str = "tickets",
 async def admin_export(request: Request, type: str = "tickets", format: str = "csv"):
     require_admin(request)
     table = _admin_table(type)
+    # SWEEP5-2026-10-24: an invalid `type` is a 400 (above), but an
+    # invalid `format` silently fell back to a CSV download — a
+    # caller asking for format=xml got CSV bytes under a .csv name
+    # with no signal anything was wrong. Validate the documented
+    # pair (case-insensitively, so CSV/JSON keep working) instead.
+    format = format.lower()
+    if format not in ("csv", "json"):
+        raise HTTPException(400, "format must be csv or json")
     async with await _db() as db:
         db.row_factory = aiosqlite.Row
         async with db.execute(f"SELECT * FROM {table} ORDER BY id DESC") as cur:
@@ -1455,21 +1483,48 @@ async def admin_export(request: Request, type: str = "tickets", format: str = "c
 async def admin_ticket_update(request: Request, ticket_id: int):
     require_admin(request)
     body = await _json_body(request)
-    status = _s(body, "status").strip().lower()
-    if status not in ("new", "open", "in_progress", "resolved", "closed"):
-        raise HTTPException(400, "Invalid status.")
-    async with await _db() as db:
-        cur = await db.execute(
-            "UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
-            (status, _s(body, "admin_notes")[:2000], ticket_id))
-        await db.commit()
-        changed = cur.rowcount
-    if not changed:
-        # BH2-3: the update matched no ticket — say so instead of
-        # reporting (and logging) a success that never happened.
+    # SWEEP5-2026-10-24: this is a PATCH — the field a caller omits
+    # must keep its stored value. The old handler required status
+    # on every call and rewrote admin_notes from the body
+    # unconditionally, so a status-only update silently erased the
+    # ticket's admin notes (verified: notes set, status-only PATCH,
+    # notes read back empty), and a notes-only update was a 400.
+    if not 0 <= ticket_id <= 9223372036854775807:
+        # Past SQLite's INTEGER range no ticket can exist; binding
+        # the raw value raised OverflowError and surfaced as a 500.
         raise HTTPException(404, "Ticket not found.")
-    log.info("ticket #%s -> %s (admin)", ticket_id, status)
-    return {"ok": True, "id": ticket_id, "status": status}
+    has_status = "status" in body
+    has_notes = "admin_notes" in body
+    if not has_status and not has_notes:
+        raise HTTPException(
+            400, "Nothing to update: provide status and/or admin_notes.")
+    status = None
+    if has_status:
+        status = _s(body, "status").strip().lower()
+        if status not in ("new", "open", "in_progress", "resolved", "closed"):
+            raise HTTPException(400, "Invalid status.")
+    notes = None
+    if has_notes:
+        if not isinstance(body.get("admin_notes"), str):
+            raise HTTPException(400, "admin_notes must be a string.")
+        notes = body["admin_notes"][:2000]
+    async with await _db() as db:
+        async with db.execute(
+                "SELECT status, admin_notes FROM tickets WHERE id=?",
+                (ticket_id,)) as cur:
+            row = await cur.fetchone()
+        if row is None:
+            # BH2-3: the update matched no ticket — say so instead of
+            # reporting (and logging) a success that never happened.
+            raise HTTPException(404, "Ticket not found.")
+        new_status = status if has_status else row[0]
+        new_notes = notes if has_notes else (row[1] or "")
+        await db.execute(
+            "UPDATE tickets SET status=?, admin_notes=? WHERE id=?",
+            (new_status, new_notes, ticket_id))
+        await db.commit()
+    log.info("ticket #%s -> %s (admin)", ticket_id, new_status)
+    return {"ok": True, "id": ticket_id, "status": new_status}
 
 
 # ------------------------------------------------------- HackProof payments

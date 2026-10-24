@@ -117,6 +117,26 @@ def _wait_rows(db_path, n, timeout=5.0):
     return _rows(db_path)
 
 
+def _wait_quiet(db_path, quiet=0.6, timeout=15.0):
+    """Wait until the fire-and-forget insert threads have drained:
+    the row count stays unchanged for `quiet` seconds. The counting
+    tests below snapshot a `before` count and assert on the slice
+    after it — a straggler row from an earlier test landing after
+    the snapshot shifts the slice and fails the test spuriously
+    (flake reproduced on unmodified main under load, Sweep #5
+    2026-10-24: slices containing a previous test's UA/paths).
+    Draining first keeps every assertion exactly as written."""
+    deadline = time.time() + timeout
+    last, stable_since = -1, time.time()
+    while time.time() < deadline:
+        n = len(_rows(db_path))
+        if n != last:
+            last, stable_since = n, time.time()
+        elif time.time() - stable_since >= quiet:
+            return
+        time.sleep(0.05)
+
+
 def _svid_from(resp):
     sc = resp.headers.get("set-cookie", "")
     m = re.search(r"svid=([0-9a-f]{32})", sc)
@@ -162,6 +182,7 @@ def test_page_get_logs_full_row(vapp):
 
 
 def test_static_mount_pages_log_normalized(vapp):
+    _wait_quiet(vapp.DB_PATH)
     before = len(_rows(vapp.DB_PATH))
     with _client(vapp) as client:
         assert client.get("/report-issue").status_code in (200, 307)
@@ -179,6 +200,7 @@ def test_static_mount_pages_log_normalized(vapp):
 
 
 def test_exclusions_write_nothing(vapp):
+    _wait_quiet(vapp.DB_PATH)
     before = len(_rows(vapp.DB_PATH))
     with _client(vapp) as client:
         assert client.get("/api/threat-data").status_code == 200
@@ -214,6 +236,7 @@ def test_visit_grouping_and_cookie_replacement(vapp):
 
 
 def test_bot_uas_flagged_not_hidden(vapp):
+    _wait_quiet(vapp.DB_PATH)
     before = len(_rows(vapp.DB_PATH))
     with _client(vapp) as client:
         client.get("/", headers={"User-Agent": "curl/8.5.0"})
