@@ -27,4 +27,71 @@
     <span class="stat">{{ news.status if news else "" }}</span>
   </a>
 </section>
+<section class="live-previews" aria-label="Live data previews">
+  <div class="preview-head">
+    <h2>Live right now</h2>
+    <p class="dim">Live samples from the public trackers &mdash; refreshed automatically every minute. Open a tracker for the full picture.</p>
+  </div>
+  <div class="preview-grid">
+    <article class="preview">
+      <h3><a href="/threat-map">Cyber threats</a></h3>
+      <p class="stat" id="pv-threat-stat">Loading live data&hellip;</p>
+      <ul class="pv-list" id="pv-threat-list"></ul>
+      <a class="pv-open" href="/threat-map">Open the threat map &rarr;</a>
+    </article>
+    <article class="preview">
+      <h3><a href="/geopolitical">Geopolitical</a></h3>
+      <p class="stat" id="pv-geo-stat">Loading live data&hellip;</p>
+      <ul class="pv-list" id="pv-geo-list"></ul>
+      <a class="pv-open" href="/geopolitical">Open the geopolitical feed &rarr;</a>
+    </article>
+    <article class="preview">
+      <h3><a href="/flights">Flight tracker</a></h3>
+      <p class="stat">Live status for any commercial flight &mdash; route map included.</p>
+      <form class="pv-flight-form" method="get" action="/flights">
+        <input name="q" placeholder="Flight number — e.g. AA100" autocomplete="off" aria-label="Flight number">
+        <button type="submit">Track</button>
+      </form>
+      <a class="pv-open" href="/flights">Open the flight tracker &rarr;</a>
+    </article>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+// Phase Two A (2026-10-25): the operations landing now SAYS what is
+// live instead of only linking to it — top threat sources and the
+// latest geopolitical headlines, from the same public read APIs the
+// tracker pages use. The flight card spends no provider quota: it is
+// the tracker search itself, carried to the full page on submit.
+function pvEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function pvFmt(n) { return Number(n || 0).toLocaleString('en-US'); }
+async function pvLoad() {
+  try {
+    const d = await (await fetch('/api/threat-data')).json();
+    document.getElementById('pv-threat-stat').textContent =
+      pvFmt(d.attacks_today) + ' attacks today · ' + pvFmt(d.sources_today) + ' sources';
+    document.getElementById('pv-threat-list').innerHTML =
+      (d.countries || []).slice(0, 3).map(c =>
+        '<li><span>' + pvEsc(c.code) + '</span><b>' + pvFmt(c.count) + ' attacks</b></li>').join('')
+      || '<li class="dim">No data yet — retrying automatically.</li>';
+  } catch (e) {
+    document.getElementById('pv-threat-stat').textContent = 'Live data unreachable — retrying.';
+  }
+  try {
+    const g = await (await fetch('/api/geo-data')).json();
+    document.getElementById('pv-geo-stat').textContent =
+      (g.items || []).length + ' stories · ' + (g.hotspots || []).length + ' hotspots mapped';
+    document.getElementById('pv-geo-list').innerHTML =
+      (g.items || []).slice(0, 3).map(s =>
+        '<li>' + (s.link ? '<a href="' + pvEsc(s.link) + '" target="_blank" rel="noopener">' : '') +
+        pvEsc(s.title) + (s.link ? '</a>' : '') + '</li>').join('')
+      || '<li class="dim">No stories right now.</li>';
+  } catch (e) {
+    document.getElementById('pv-geo-stat').textContent = 'Live data unreachable — retrying.';
+  }
+}
+pvLoad();
+setInterval(pvLoad, 60000);
+</script>
 {% endblock %}

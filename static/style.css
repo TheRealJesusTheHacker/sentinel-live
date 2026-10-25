@@ -70,12 +70,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
 @media (max-width: 1100px) and (min-width: 861px) {
-  .topbar { gap: .6em; padding: .55em .9em; }
+  /* Phase Two A: the nav gained Operations (8 items) — this band
+     tightens a touch more so the single row survives to 861px. */
+  .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
-  .brand-name { font-size: 1em; }
-  .mainnav { gap: .15em; }
-  .mainnav a { padding: .35em .55em; }
-  .mainnav a.nav-cta { margin-left: .45em; padding: .35em .95em; }
+  .brand-name { font-size: .98em; }
+  .mainnav { gap: .1em; }
+  .mainnav a { padding: .35em .45em; }
+  .mainnav a.nav-cta { margin-left: .35em; padding: .35em .9em; }
 }
 @media (max-width: 860px) {
   .topbar { flex-direction: column; align-items: stretch; gap: .35em; padding: .55em .9em .5em; }
@@ -93,12 +95,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 main { max-width: 1100px; margin: 0 auto; padding: 1.2em; }
 footer {
   border-top: 1px solid var(--line); margin-top: 2em; padding: 1em;
-  display: flex; justify-content: space-between; color: var(--dim); font-size: .85em;
+  display: flex; justify-content: space-between; gap: .4em 1.5em; flex-wrap: wrap;
+  color: var(--dim); font-size: .85em;
 }
 
 .hero { text-align: center; padding: 2.2em 1em 1.2em; }
 .hero h1 { font-size: 2.6em; margin: 0; letter-spacing: .06em; }
-.hero .sub, .pagehead .sub { color: var(--dim); max-width: 640px; margin: .6em auto; }
+.hero .sub { color: var(--dim); max-width: 640px; margin: .6em auto; }
+/* Phase Two A (2026-10-25): .pagehead .sub used to share the hero's
+   centered rule, so tracker intros floated centered under a
+   left-aligned H1. Page heads are left-aligned — the sub follows. */
+.pagehead .sub { color: var(--dim); max-width: 640px; margin: .6em 0; }
 .pagehead { margin-bottom: 1em; }
 .pagehead h1 { margin: .2em 0; letter-spacing: .04em; }
 
@@ -110,6 +117,38 @@ footer {
 .card:hover { border-color: var(--grn-dim); text-decoration: none; }
 .card h3 { margin: 0 0 .4em; color: var(--grn); }
 .card .stat { color: var(--dim); font-size: .85em; }
+
+/* Phase Two A (2026-10-25): live-preview panels — the trackers'
+   current data on the operations landing (and, in the site's own
+   styling, on the marketing homepage), fed by the public read APIs.
+   Same panel language as .card/.counter: panel fill, hairline border,
+   green accents; black/white/green only. */
+.live-previews { margin-top: 2em; }
+.preview-head h2 { margin-bottom: .3em; }
+.preview-head .dim { margin-top: 0; }
+.preview-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 1em; }
+.preview {
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+  padding: 1.1em 1.2em; display: flex; flex-direction: column; gap: .55em;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.preview:hover { border-color: var(--grn-dim); box-shadow: 0 6px 22px rgba(0,0,0,.45); }
+.preview h3 { margin: 0; font-size: 1.05em; }
+.preview h3 a { color: var(--grn); }
+.preview .stat { color: var(--txt); font-weight: 600; margin: 0; }
+.pv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .4em; font-size: .92em; }
+.pv-list li { display: flex; justify-content: space-between; gap: 1em; border-bottom: 1px solid #121a14; padding-bottom: .35em; }
+.pv-list li:last-child { border-bottom: 0; padding-bottom: 0; }
+.pv-list b { color: var(--grn); white-space: nowrap; }
+.pv-list a { color: var(--txt); }
+.pv-list a:hover { color: var(--grn); }
+.pv-open { margin-top: auto; font-weight: 600; font-size: .92em; }
+.pv-flight-form { display: flex; gap: .5em; }
+.pv-flight-form input {
+  flex: 1; min-width: 0; padding: .6em .8em; border-radius: 8px;
+  border: 1px solid var(--line); background: #000; color: var(--txt); font-size: .95em;
+}
+.pv-flight-form button { padding: .6em 1.1em; font-size: .95em; }
 
 .counters { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: .8em; margin: 1em 0; }
 .counter { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: .9em; text-align: center; }
@@ -143,6 +182,10 @@ footer {
   padding: .55em .9em; margin: .6em 0 0; font-size: .85em; color: var(--dim);
 }
 .maplegend b { color: var(--txt); }
+/* Flights (Phase Two A): legend + note sit ABOVE the map, matching
+   the reading order of the other trackers' chrome. */
+.maplegend.maplegend-top { margin: 0 0 .6em; }
+#fmap-note { margin: 0 0 .6em; }
 .maplegend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: .45em; vertical-align: baseline; }
 .maplegend .dash { display: inline-block; width: 22px; border-top: 2px dashed var(--red); margin-right: .45em; vertical-align: middle; }
 .maplegend .dash.grn { border-top-color: var(--grn); }
@@ -276,4 +319,9 @@ section { margin-bottom: 1.5em; }
 @media (max-width: 700px) { main { padding: 1em .9em; } section { margin-bottom: 1.2em; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+  /* SVG route/attack arcs animate stroke-dashoffset via CSS on the
+     path itself; the blanket rule above stops it, and this keeps the
+     dashes static (visible, just not marching) — stated explicitly so
+     the arc case is pinned, not incidental. */
+  .arc { animation: none !important; }
 }

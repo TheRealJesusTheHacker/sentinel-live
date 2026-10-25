@@ -6,7 +6,7 @@
 <meta name="description" content="Sentinel Safeguard live operations — public threat, geopolitical, and flight tracking for Kansas City, MO.">
 <meta name="robots" content="noindex, nofollow">
 <title>{% block title %}Sentinel Safeguard{% endblock %} — Sentinel Safeguard LLC</title>
-<link rel="stylesheet" href="/static/style.css?v=20261023-2">
+<link rel="stylesheet" href="/static/style.css?v=20261025-1">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -17,6 +17,7 @@
   </a>
   <nav class="mainnav" aria-label="Main">
     <a href="/"{% if request.url.path in ['/', '/index.html'] %} class="active" aria-current="page"{% endif %}>Home</a>
+    <a href="/operations"{% if request.url.path == '/operations' %} class="active" aria-current="page"{% endif %}>Operations</a>
     <a href="/threat-map"{% if request.url.path == '/threat-map' %} class="active" aria-current="page"{% endif %}>Threat Map</a>
     <a href="/geopolitical"{% if request.url.path == '/geopolitical' %} class="active" aria-current="page"{% endif %}>Geopolitical</a>
     <a href="/flights"{% if request.url.path == '/flights' %} class="active" aria-current="page"{% endif %}>Flights</a>

@@ -47,13 +47,13 @@
 </section>
 {% endif %}
 <section>
-  <div id="fmap" class="map"></div>
-  <div class="maplegend">
+  <div class="maplegend maplegend-top">
     <b>Legend</b>
     <span><i class="dash grn"></i>great-circle route</span>
     <span>&#9992; live aircraft position (when the provider reports it)</span>
   </div>
   <p class="dim" id="fmap-note">World view — search a flight number above and its route is plotted here.</p>
+  <div id="fmap" class="map"></div>
 </section>
 {% endblock %}
 {% block scripts %}
@@ -145,7 +145,7 @@ function aptPopup(title, apt, code, when) {
         (RESULT.live.altitude != null ? '<br>Altitude: ' + esc(Math.round(RESULT.live.altitude)) + ' m' : '') +
         (RESULT.live.speed_horizontal != null ? '<br>Ground speed: ' + esc(Math.round(RESULT.live.speed_horizontal)) + ' km/h' : '') +
         (RESULT.live.direction != null ? '<br>Heading: ' + esc(Math.round(RESULT.live.direction)) + '&deg;' : ''))
-      .addTo(fmap);
+      .addTo(fmap).openPopup();
     bounds.push(lp);
   }
   if (bounds.length) fmap.fitBounds(bounds, {padding: [45, 45], maxZoom: 6});
