@@ -413,6 +413,42 @@ input:focus, select:focus, textarea:focus { border-color: var(--grn-dim); }
 section { margin-bottom: 1.5em; }
 .pagehead { margin-bottom: 1.2em; }
 @media (max-width: 700px) { main { padding: 1em .9em; } section { margin-bottom: 1.2em; } }
+/* LF-2026-10-25: live traffic layer on /flights — heading-rotated
+   aircraft markers (red-family altitude bands), the selection and
+   emergency halos, the live status strip, and the flight detail
+   panel. Marker colors are the site's pre-existing --red / --amber
+   data colors (the legend carries the mapping); everything else is
+   the shared black / white / green system. */
+.leaflet-div-icon.acicon { background: transparent; border: none; }
+.acwrap { position: relative; width: 30px; height: 30px; }
+.acrot { position: absolute; inset: 0; transition: transform 14s linear; will-change: transform; }
+.acrot svg { display: block; filter: drop-shadow(0 1px 2px rgba(0,0,0,.6)); }
+.achalo { display: none; position: absolute; inset: -5px; border: 2px solid var(--grn); border-radius: 50%; box-shadow: 0 0 10px rgba(0,230,118,.45); pointer-events: none; }
+.acwrap.sel .achalo { display: block; }
+.acicon.acalert .achalo { display: block; border-color: var(--red); box-shadow: 0 0 10px rgba(255,68,68,.55); animation: acpulse 1.6s ease-in-out infinite; }
+@keyframes acpulse { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+.aclab { position: absolute; left: 50%; top: 31px; transform: translateX(-50%); font-family: var(--font-mono); font-size: 10px; letter-spacing: .04em; color: #eafff3; background: rgba(6,10,7,.8); padding: 0 4px; border-radius: 3px; white-space: nowrap; pointer-events: none; }
+.lgsw { width: 14px; height: 14px; vertical-align: -2px; margin-right: .4em; }
+.acring { display: inline-block; width: 11px; height: 11px; border: 2px solid var(--red); border-radius: 50%; margin-right: .45em; vertical-align: -1px; }
+.livestat { display: flex; flex-wrap: wrap; gap: .3em 1.2em; justify-content: space-between; margin-top: .6em; font-family: var(--font-mono); font-size: .8em; color: var(--dim); }
+.livestat #live-status { color: var(--txt); }
+.fpanel { position: relative; background: var(--surf); border: 1px solid var(--line); border-radius: var(--r-m); padding: 1.1em 1.2em; margin-top: 1em; box-shadow: var(--shadow-1); }
+.fpanel h2 { margin: 0 2em 0 0; font-family: var(--font-disp); letter-spacing: .01em; }
+.fpanel #fp-sub { margin: .2em 0 0; }
+#fp-close { position: absolute; top: .5em; right: .6em; background: none; border: none; box-shadow: none; color: var(--dim); font-size: 1.35em; line-height: 1; padding: .15em .35em; }
+#fp-close:hover { background: none; transform: none; color: var(--txt); }
+.fpgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .7em 1.2em; margin: 1em 0 .4em; }
+.fpgrid dt { font-family: var(--font-mono); font-size: .7em; letter-spacing: .09em; text-transform: uppercase; color: var(--dim); }
+.fpgrid dd { margin: .15em 0 0; font-family: var(--font-mono); font-size: 1.02em; color: var(--txt); }
+.fp-emg { color: var(--red); font-weight: 700; }
+.tracklive-wrap { margin: 1em 0 0; }
+.btn-track { font-size: .95em; padding: .6em 1.2em; }
+.smallprint { font-size: .82em; margin-top: .9em; max-width: 78ch; }
+@media (prefers-reduced-motion: reduce) {
+  .acrot { transition: none; }
+  .acicon.acalert .achalo { animation: none; }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   /* SVG route/attack arcs animate stroke-dashoffset via CSS on the

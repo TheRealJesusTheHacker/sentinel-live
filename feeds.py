@@ -732,3 +732,196 @@ AIRPORT_COORDS = {
     "ADD": (8.9779, 38.7993), "CAI": (30.1219, 31.4056),
     "LOS": (6.5774, 3.3212), "ACC": (5.6052, -0.1667),
 }
+
+
+# --------------------------------------------------------------- live traffic
+# LF-2026-10-25: live aircraft positions for the Flight Tracker, from
+# adsb.lol — a community ADS-B aggregator (keyless, ODbL data; the API
+# answers {ac: [...], total, now}). Probed from the production box
+# before this was designed around it: HTTP 200 in ~0.4s. Two upstream
+# disciplines shape everything below:
+#   * adsb.lol advertises a tight request budget (~4/s, 60/min,
+#     500/day per IP via x-ratelimit-*), so ALL upstream fetches go
+#     through one lock + one global min-interval gate, and every area
+#     answer is cached well past the page's poll interval — visitor
+#     count can never multiply upstream calls.
+#   * The upstream uses cache-control: no-store and community
+#     receivers, so a fetch can fail or arrive thin at any time: on
+#     ANY failure the caller gets the last good answer for the area
+#     flagged stale, never a raw upstream error.
+LIVE_ADSB_BASE = "https://api.adsb.lol/v2"
+LIVE_CACHE_TTL = 20.0        # s an area answer stays fresh
+LIVE_STALE_TTL = 600.0       # s a last-good answer may be served stale
+LIVE_MIN_UPSTREAM_GAP = 16.0  # s between upstream fetches, any area
+LIVE_MAX_DIST = 250          # nm — the upstream's own radius ceiling
+LIVE_DEFAULT_DIST = 100      # nm — covers the full opening KC view
+LIVE_UPSTREAM_TIMEOUT = 12.0  # s — upstream answers in <1s when healthy
+LIVE_RESPONSE_NOTE = (
+    "Live positions from community ADS-B receivers via adsb.lol "
+    "(ODbL). Coverage varies by area and positions can lag — not an "
+    "official navigation or safety source.")
+
+_live_cache = {}             # key -> {"fetched": float, "payload": dict}
+_live_lock = None            # asyncio.Lock, created lazily inside a loop
+_live_last_fetch = 0.0       # epoch of the last upstream fetch attempt
+
+_EMERGENCY_SQUAWKS = {"7500", "7600", "7700"}
+
+
+def _live_num(v):
+    """Feed numbers arrive as numbers, numeric strings, the literal
+    'ground' (alt_baro on the surface), or missing — normalize to a
+    float or None without ever raising."""
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _live_key(lat, lon, dist):
+    """Cache/coalescing key: area centers rounded to ~11 km cells so
+    nearby viewports share one answer (and one upstream budget)."""
+    return (round(float(lat) * 10) / 10, round(float(lon) * 10) / 10,
+            int(dist))
+
+
+def normalize_aircraft(ac):
+    """One raw adsb.lol record -> the clean shape the page consumes,
+    or None when the record has no usable position. Feed values only:
+    registration/type are included because the feed carries them,
+    never derived or invented here."""
+    if not isinstance(ac, dict):
+        return None
+    lat, lon = _live_num(ac.get("lat")), _live_num(ac.get("lon"))
+    if lat is None or lon is None:
+        return None
+    callsign = str(ac.get("flight") or "").strip()
+    squawk = str(ac.get("squawk") or "").strip() or None
+    alt = ac.get("alt_baro")
+    on_ground = isinstance(alt, str) and alt.strip().lower() == "ground"
+    alt_ft = None if on_ground else _live_num(alt)
+    if alt_ft is None and not on_ground:
+        alt_ft = _live_num(ac.get("alt_geom"))
+    vr = _live_num(ac.get("baro_rate"))
+    if vr is None:
+        vr = _live_num(ac.get("geom_rate"))
+    heading = _live_num(ac.get("track"))
+    if heading is None:
+        heading = _live_num(ac.get("true_heading"))
+    return {
+        "hex": str(ac.get("hex") or ""),
+        "callsign": callsign or None,
+        "registration": (str(ac.get("r")).strip() or None)
+                        if ac.get("r") else None,
+        "type": (str(ac.get("t")).strip() or None) if ac.get("t") else None,
+        "lat": round(lat, 5),
+        "lon": round(lon, 5),
+        "altitude_ft": int(round(alt_ft)) if alt_ft is not None else None,
+        "on_ground": bool(on_ground),
+        "speed_kt": _live_num(ac.get("gs")),
+        "heading": heading,
+        "vertical_rate_fpm": int(round(vr)) if vr is not None else None,
+        "squawk": squawk,
+        "emergency": squawk in _EMERGENCY_SQUAWKS,
+        "category": (str(ac.get("category")).strip() or None)
+                    if ac.get("category") else None,
+        "seen_s": _live_num(ac.get("seen_pos")),
+    }
+
+
+def normalize_live_payload(raw):
+    """Whole upstream body -> clean aircraft list + upstream total.
+    Non-dict bodies and junk records degrade to an empty list, never
+    an exception (the caller treats 'no aircraft' as 'no data' and
+    falls back to last-good)."""
+    if not isinstance(raw, dict):
+        return [], 0
+    out = []
+    for ac in raw.get("ac") or []:
+        n = normalize_aircraft(ac)
+        if n is not None:
+            out.append(n)
+    total = raw.get("total")
+    if not isinstance(total, int) or total < len(out):
+        total = len(out)
+    return out, total
+
+
+async def _fetch_live_upstream(lat, lon, dist, timeout):
+    url = "%s/lat/%s/lon/%s/dist/%d" % (
+        LIVE_ADSB_BASE, round(float(lat), 4), round(float(lon), 4),
+        int(dist))
+    async with _make_client(follow_redirects=True) as client:
+        r = await _get(client, url, timeout)
+        return r.json()
+
+
+async def fetch_live_flights(lat, lon, dist, timeout=LIVE_UPSTREAM_TIMEOUT):
+    """Live aircraft around (lat, lon) within dist nm.
+
+    Returns (payload, upstream_attempted). Payload shape:
+    {aircraft: [...], total, center: {lat, lon}, dist, fetched_at,
+     age_s, stale, source, note}. On upstream failure (or while the
+    global upstream gate is closed) the last good answer for the area
+    is returned with stale=True; with no history at all, an empty
+    stale payload. NEVER raises and never leaks upstream error text —
+    the same contract the Command Live Intel feeds use."""
+    global _live_lock, _live_last_fetch
+    lat, lon, dist = float(lat), float(lon), int(dist)
+    now = time.time()
+    key = _live_key(lat, lon, dist)
+    hit = _live_cache.get(key)
+    if hit and now - hit["fetched"] < LIVE_CACHE_TTL:
+        return dict(hit["payload"],
+                    age_s=round(now - hit["fetched"], 1), stale=False), False
+    if _live_lock is None:
+        _live_lock = asyncio.Lock()
+    attempted = False
+    fresh = None
+    async with _live_lock:
+        # Re-check under the lock: a concurrent request for this area
+        # may have just refreshed it while we waited.
+        now = time.time()
+        hit = _live_cache.get(key)
+        if hit and now - hit["fetched"] < LIVE_CACHE_TTL:
+            return dict(hit["payload"],
+                        age_s=round(now - hit["fetched"], 1),
+                        stale=False), False
+        if now - _live_last_fetch >= LIVE_MIN_UPSTREAM_GAP:
+            attempted = True
+            _live_last_fetch = now
+            try:
+                raw = await _fetch_live_upstream(lat, lon, dist, timeout)
+                aircraft, total = normalize_live_payload(raw)
+            except Exception:
+                aircraft, total = [], 0
+            if aircraft:
+                fresh = {
+                    "aircraft": aircraft, "total": total,
+                    "center": {"lat": round(lat, 4), "lon": round(lon, 4)},
+                    "dist": dist,
+                    "fetched_at": datetime.fromtimestamp(
+                        now, timezone.utc).isoformat(timespec="seconds"),
+                    "source": "adsb.lol", "note": LIVE_RESPONSE_NOTE,
+                }
+                if len(_live_cache) > 64:
+                    _live_cache.clear()
+                _live_cache[key] = {"fetched": now, "payload": fresh}
+    if fresh is not None:
+        return dict(fresh, age_s=0.0, stale=False), attempted
+    if hit and now - hit["fetched"] < LIVE_STALE_TTL:
+        return dict(hit["payload"],
+                    age_s=round(now - hit["fetched"], 1),
+                    stale=True), attempted
+    return {
+        "aircraft": [], "total": 0,
+        "center": {"lat": round(lat, 4), "lon": round(lon, 4)},
+        "dist": dist, "fetched_at": None, "age_s": None, "stale": True,
+        "source": "adsb.lol", "note": LIVE_RESPONSE_NOTE,
+    }, attempted

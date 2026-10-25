@@ -1044,6 +1044,36 @@ async def api_geo():
     return JSONResponse(store["geo"])
 
 
+_LIVE_DEFAULT_CENTER = (39.1, -94.6)  # Kansas City — the tracker's home view
+
+
+@app.get("/api/live-flights")
+async def api_live_flights(request: Request, lat: float = None,
+                           lon: float = None, dist: int = None):
+    # LF-2026-10-25: live aircraft positions (community ADS-B via
+    # adsb.lol, ODbL) for the Flight Tracker map. Public like the
+    # other read APIs, but capped harder than the form endpoints:
+    # the frontend polls every 15s per open tab, so the per-IP bucket
+    # allows a few concurrent tabs plus pan/zoom refetches — while
+    # feeds.fetch_live_flights guarantees visitor count can never
+    # multiply upstream calls (server cache + one global upstream
+    # gate), so this endpoint is cheap to serve at any audience.
+    rate_limit(request, max_hits=300, window=600)
+    if lat is None:
+        lat = _LIVE_DEFAULT_CENTER[0]
+    if lon is None:
+        lon = _LIVE_DEFAULT_CENTER[1]
+    if dist is None:
+        dist = feeds.LIVE_DEFAULT_DIST
+    if not (-90.0 <= lat <= 90.0) or not (-180.0 <= lon <= 180.0):
+        raise HTTPException(400, "lat/lon out of range.")
+    dist = max(1, min(int(dist), feeds.LIVE_MAX_DIST))
+    timeout = config["feeds"]["request_timeout_seconds"]
+    payload, _attempted = await feeds.fetch_live_flights(
+        lat, lon, dist, timeout=min(timeout, feeds.LIVE_UPSTREAM_TIMEOUT))
+    return JSONResponse(payload)
+
+
 @app.get("/api/news-data")
 async def api_news(request: Request):
     # BH-2026-10-23 (H-1): this endpoint returns the FULL briefing
