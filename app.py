@@ -1338,7 +1338,8 @@ _INTERNAL_TOKEN_DEFAULT_PATH = "/opt/sentinel-live/internal_token.txt"
 
 
 def _internal_token() -> str:
-    """The shared token for /internal/visitors, read from a box-local
+    """The shared token for the /internal/* endpoints (visitors and
+    the ITEM6 ticket bridge), read from a box-local
     file on every call (rotation needs no restart). The path comes
     from SENTINEL_LIVE_INTERNAL_TOKEN_PATH or the production
     default; a missing/unreadable file means the feature is OFF and
@@ -1452,6 +1453,55 @@ async def internal_visitors(request: Request, days: str = "2",
                         "topReferrers": top_refs,
                         "topCountries": top_countries},
             "feed": feed}
+
+
+@app.get("/internal/tickets")
+async def internal_tickets(request: Request, after: str = "0",
+                           limit: str = "200"):
+    # ITEM6-2026-10-25: the public-ticket bridge feed for Sentinel
+    # Command. Same three gates as /internal/visitors (the shared
+    # _visitors_gate: loopback peer, no CF-Connecting-IP, box token
+    # file) and the same stealth contract — every gate failure is
+    # the same plain 404. after/limit are raw strings parsed only
+    # AFTER the gate, for the SWEEP5 reason recorded on
+    # /internal/visitors: typed int params would be validated by
+    # FastAPI before the handler runs and a 422 would oracle this
+    # endpoint apart from a nonexistent path.
+    #
+    # Contract: tickets with id > after, oldest first, so the
+    # caller can keep a durable cursor (the highest id it has seen)
+    # and never re-fetch history. The response carries maxId — the
+    # highest ticket id in the whole table, or 0 when empty — so a
+    # caller can distinguish "caught up" from "empty". Reporter IP
+    # and admin_notes deliberately do NOT ride this feed: Command
+    # needs the ticket, not the abuse-tracking metadata.
+    _visitors_gate(request)
+    try:
+        after = int(after)
+        limit = int(limit)
+    except (TypeError, ValueError):
+        raise HTTPException(400, "after and limit must be integers.")
+    after = max(0, after)
+    limit = max(1, min(limit, 500))
+    async with await _db() as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+                "SELECT COALESCE(MAX(id), 0) FROM tickets") as cur:
+            max_id = (await cur.fetchone())[0]
+        async with db.execute(
+                "SELECT id, created_at, name, email, phone, category,"
+                " priority, subject, message, status FROM tickets"
+                " WHERE id > ? ORDER BY id ASC LIMIT ?",
+                (after, limit)) as cur:
+            rows = await cur.fetchall()
+    return {"tickets": [{
+                "id": r["id"], "createdAt": r["created_at"],
+                "name": r["name"], "email": r["email"],
+                "phone": r["phone"], "category": r["category"],
+                "priority": r["priority"], "subject": r["subject"],
+                "message": r["message"], "status": r["status"]}
+            for r in rows],
+            "maxId": max_id}
 
 
 # ------------------------------------------------------------------ website backend APIs
