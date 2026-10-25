@@ -659,6 +659,31 @@ app.add_middleware(_VisitorLogMiddleware)
 app.mount("/static", StaticFiles(directory=res_dir("static")), name="static")
 templates = Jinja2Templates(directory=str(res_dir("templates")))
 
+
+# Site polish 2026-10-25: a browser that navigates to a missing page
+# gets the site's own themed 404 (in the shared chrome) instead of a
+# bare JSON line. The carve-out is deliberately narrow so no API or
+# probing behavior can change: ONLY a 404, ONLY on a GET/HEAD, ONLY
+# when the client explicitly accepts text/html (browsers navigating;
+# API clients and the test suite's default */* are untouched), and
+# NEVER on /api/* (JSON contract) or /internal/* (the anti-probing
+# surface answers the same plain 404 to everything, browsers
+# included). Every other HTTP error keeps Starlette's default JSON
+# shape, headers included.
+from starlette.exceptions import HTTPException as _StarletteHTTPException
+
+
+@app.exception_handler(_StarletteHTTPException)
+async def _http_exception_handler(request: Request, exc):
+    if (exc.status_code == 404 and request.method in ("GET", "HEAD")
+            and not request.url.path.startswith(("/api", "/internal"))
+            and "text/html" in request.headers.get("accept", "").lower()):
+        return templates.TemplateResponse(
+            request, "404.html", {"request": request, "now": _utcnow()},
+            status_code=404)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
+                        headers=getattr(exc, "headers", None))
+
 # in-memory live-data store (SQLite holds the persistent stuff)
 STARTED_AT = None
 store = {

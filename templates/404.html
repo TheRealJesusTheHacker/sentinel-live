@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Page not found{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <p class="svc-kicker">Error 404</p>
+  <h1>Nothing <span class="grn">answers here.</span></h1>
+  <p class="sub">The page you asked for is not on this site — the address
+  may be mistyped, or the page may have moved. This is not a gated page
+  answering quietly: it simply does not exist.</p>
+</section>
+
+<section class="rv">
+  <p><a class="btn-link" href="/">Back to the front door &rarr;</a><br>
+  <a class="btn-link" href="/services">See the services in full &rarr;</a><br>
+  <a class="btn-link" href="/report-issue">Report an issue &rarr;</a><br>
+  <a class="btn-link" href="/contact">Send a message &rarr;</a></p>
+</section>
+{% endblock %}

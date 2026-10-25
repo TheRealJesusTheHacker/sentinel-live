@@ -1,6 +1,6 @@
 /* Sentinel Safeguard — green on black. No purple. */
 :root {
-  --bg: #060807;
+  --bg: #060806;
   --panel: #0c100d;
   --panel2: #101511;
   --line: #1d2b20;
@@ -22,13 +22,14 @@
   --shadow-2: 0 22px 54px rgba(0,0,0,.55);
   --surf: linear-gradient(180deg, var(--panel2), var(--panel));
   --font-disp: "Archivo", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  --font-sans: "Archivo", "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
   --ease-out: cubic-bezier(.22,.61,.21,1);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--txt);
-  font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+  font-family: var(--font-sans);
   line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
@@ -67,7 +68,7 @@ a:hover { text-decoration: underline; }
 }
 .brand { display: inline-flex; align-items: center; gap: .65em; color: #fff; min-height: 44px; flex: 0 0 auto; }
 .brand:hover { text-decoration: none; }
-.brand-logo { height: 44px; width: auto; display: block; border-radius: 7px; }
+.brand-logo { height: 44px; width: auto; display: block; border-radius: var(--r-s); }
 .brand-name { font-family: var(--font-disp); font-weight: 800; letter-spacing: .08em; font-size: 1.05em; white-space: nowrap; }
 .brand-name em { font-style: normal; color: var(--grn); }
 .mainnav { display: flex; align-items: center; gap: .3em; flex-wrap: nowrap; flex: 0 1 auto; }
@@ -84,13 +85,13 @@ a:hover { text-decoration: underline; }
   box-shadow: inset 0 0 0 1px rgba(0,230,118,.28);
 }
 .mainnav a.nav-cta {
-  background: var(--grn); color: #04120a; font-weight: 700; margin-left: .7em;
+  background: linear-gradient(180deg, var(--grn), var(--grn-dim)); color: #04120a; font-weight: 700; margin-left: .7em;
   padding: .35em 1.15em; border-radius: 999px;
   transition: background-color .18s ease, transform .12s ease;
 }
-.mainnav a.nav-cta:hover { background: #00c163; background: color-mix(in srgb, var(--grn) 84%, #000); color: #04120a; text-decoration: none; }
+.mainnav a.nav-cta:hover { background: color-mix(in srgb, var(--grn) 84%, #000); color: #04120a; text-decoration: none; }
 .mainnav a.nav-cta:active { transform: scale(.97); }
-a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
 @media (max-width: 1900px) and (min-width: 861px) {
@@ -166,7 +167,7 @@ footer {
   background: linear-gradient(180deg, transparent, rgba(0,230,118,.03));
 }
 .foot-brand { display: inline-flex; align-items: center; gap: .6em; color: var(--txt); font-weight: 600; }
-.foot-mark { height: 28px; width: auto; display: block; border-radius: 5px; }
+.foot-mark { height: 28px; width: auto; display: block; border-radius: var(--r-s); }
 .foot-links { display: inline-flex; gap: 1.2em; flex-wrap: wrap; }
 .foot-links a { color: var(--dim); font-weight: 600; transition: color .18s ease; }
 .foot-links a:hover { color: var(--grn); text-decoration: none; }
@@ -217,7 +218,7 @@ footer {
 .preview h3 a { color: var(--grn); }
 .preview .stat { color: var(--txt); font-weight: 600; margin: 0; }
 .pv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .4em; font-size: .92em; }
-.pv-list li { display: flex; justify-content: space-between; gap: 1em; border-bottom: 1px solid #121a14; padding-bottom: .35em; }
+.pv-list li { display: flex; justify-content: space-between; gap: 1em; border-bottom: 1px solid var(--line-soft); padding-bottom: .35em; }
 .pv-list li:last-child { border-bottom: 0; padding-bottom: 0; }
 .pv-list b { color: var(--grn); white-space: nowrap; }
 .pv-list a { color: var(--txt); }
@@ -236,7 +237,7 @@ footer {
 .counter span { color: var(--dim); font-family: var(--font-mono); font-size: .72em; letter-spacing: .09em; text-transform: uppercase; }
 
 .map { height: 440px; border: 1px solid var(--line); border-radius: var(--r-l); background: #000;
-  box-shadow: 0 0 0 1px #0a0f0b, var(--shadow-2); }
+  box-shadow: 0 0 0 1px var(--bg), var(--shadow-2); }
 .map.small { height: 320px; margin-top: 1em; }
 @media (max-width: 700px) { .map { height: 340px; } .map.small { height: 300px; } }
 /* isolation confines Leaflet's internal z-indexes (panes to 700,
@@ -285,17 +286,17 @@ footer {
   background: none; border: none; color: var(--grn); font-size: 22px; line-height: 1;
   text-shadow: 0 0 5px #000, 0 0 2px #000; text-align: center;
 }
-.leaflet-popup-content-wrapper { background: #0c100d; color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: var(--shadow-1); }
-.leaflet-popup-tip { background: #0c100d; }
+.leaflet-popup-content-wrapper { background: var(--panel); color: var(--txt); border: 1px solid var(--line); border-radius: var(--r-s); box-shadow: var(--shadow-1); }
+.leaflet-popup-tip { background: var(--panel); }
 .leaflet-popup-content { font-size: .93em; line-height: 1.5; margin: .8em 1em; }
 .leaflet-popup-content a { color: var(--grn); }
 .leaflet-popup-content .popmeta { color: var(--dim); font-size: .85em; }
 .leaflet-popup-content ul { margin: .3em 0 0; padding-left: 1.1em; }
 .leaflet-popup-close-button { color: var(--dim) !important; }
-.leaflet-control-layers { background: var(--panel) !important; color: var(--txt) !important; border: 1px solid var(--line) !important; border-radius: 8px !important; }
-.leaflet-control-scale-line { background: rgba(0,0,0,.55); color: #fff; border-color: #999; font-size: 10px; }
-.leaflet-control-attribution { background: rgba(0,0,0,.55) !important; color: #8a978c !important; font-size: 9px !important; }
-.leaflet-control-attribution a { color: #8a978c !important; }
+.leaflet-control-layers { background: var(--panel) !important; color: var(--txt) !important; border: 1px solid var(--line) !important; border-radius: var(--r-s) !important; }
+.leaflet-control-scale-line { background: rgba(0,0,0,.55); color: #fff; border-color: var(--dim); font-size: 10px; }
+.leaflet-control-attribution { background: rgba(0,0,0,.55) !important; color: var(--dim) !important; font-size: 9px !important; }
+.leaflet-control-attribution a { color: var(--dim) !important; }
 
 .pulse { background: var(--red); border-radius: 50%; border: 2px solid #ff8888;
   animation: pulse 1.6s ease-out infinite; }
@@ -310,12 +311,12 @@ footer {
 .bars { list-style: none; padding: 0; }
 .bars li { display: flex; align-items: center; gap: .6em; margin: .4em 0; }
 .bars span { width: 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: .9em; }
-.bars .bar { flex: 1; height: 8px; background: #16201a; border-radius: 4px; }
+.bars .bar { flex: 1; height: 8px; background: var(--line-soft); border-radius: 4px; }
 .bars .bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--grn-dim), var(--grn)); border-radius: 4px; }
 .bars b { color: var(--grn); min-width: 2em; text-align: right; }
 
 .ticker { max-height: 300px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--r-m); background: var(--panel); }
-.tick { display: flex; gap: 1em; padding: .5em .8em; border-bottom: 1px solid #121a14; font-size: .9em; transition: background-color .15s ease; }
+.tick { display: flex; gap: 1em; padding: .5em .8em; border-bottom: 1px solid var(--line-soft); font-size: .9em; transition: background-color .15s ease; }
 .tick:hover { background: rgba(0,230,118,.05); }
 .tick code { color: var(--grn); }
 .tick span { color: var(--txt); }
@@ -332,12 +333,12 @@ footer {
 .briefing h2 { color: var(--grn); margin-top: 0; }
 .briefing ul { margin: .3em 0 1em; }
 
-.notice { background: var(--panel); border: 1px solid var(--amber); border-radius: 8px; padding: 1em 1.2em; margin: 1em 0; }
+.notice { background: var(--panel); border: 1px solid var(--amber); border-radius: var(--r-s); padding: 1em 1.2em; margin: 1em 0; }
 .notice code { background: #000; padding: .1em .4em; border-radius: 4px; color: var(--grn); }
 
 .searchbar { display: flex; gap: .6em; margin: 1.2em 0; }
 .searchbar input {
-  flex: 1; padding: .7em 1em; font-size: 1em; border-radius: 8px;
+  flex: 1; padding: .7em 1em; font-size: 1em; border-radius: var(--r-s);
   border: 1px solid var(--line); background: #000; color: var(--txt);
 }
 button, .searchbar button {
@@ -345,7 +346,7 @@ button, .searchbar button {
   padding: .7em 1.4em; font-weight: 700; cursor: pointer; font-size: 1em;
   box-shadow: 0 6px 18px rgba(0,230,118,.16);
 }
-button:hover { background: linear-gradient(180deg, #1bf587, var(--grn)); transform: translateY(-1px); }
+button:hover { background: linear-gradient(180deg, #8cffc4, var(--grn)); transform: translateY(-1px); }
 
 .flight { background: var(--surf); border: 1px solid var(--line); border-radius: var(--r-m); padding: 1.2em; margin-top: 1em; box-shadow: var(--shadow-1); }
 .flight h2 { margin: 0; }
@@ -359,12 +360,12 @@ button:hover { background: linear-gradient(180deg, #1bf587, var(--grn)); transfo
 .tablewrap { overflow-x: auto; }
 table { width: 100%; border-collapse: collapse; font-size: .85em; }
 th, td { border: 1px solid var(--line); padding: .5em .7em; text-align: left; vertical-align: top; }
-th { background: #0a120c; color: var(--grn); }
+th { background: var(--panel); color: var(--grn); }
 td { max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 
 select, input[type=text] {
   background: #000; color: var(--txt); border: 1px solid var(--line);
-  border-radius: 6px; padding: .5em .8em; font-size: 1em;
+  border-radius: var(--r-s); padding: .5em .8em; font-size: 1em;
 }
 
 /* Status page (styles added 2026-10-23 — the template's classes shipped
@@ -383,7 +384,7 @@ select, input[type=text] {
 .status-table { margin-bottom: 1.2em; }
 .badge {
   display: inline-block; padding: .12em .7em; border-radius: 999px; font-size: .82em; font-weight: 700;
-  background: #16201a; color: var(--txt); border: 1px solid var(--line); text-transform: capitalize;
+  background: var(--line-soft); color: var(--txt); border: 1px solid var(--line); text-transform: capitalize;
 }
 .badge.ok { background: #0a2a16; color: var(--grn); border-color: var(--grn-dim); }
 .badge.error, .badge.failed { background: #2a0d0d; color: var(--red); border-color: #5c2222; }
