@@ -57,9 +57,18 @@ CANONICAL_FOOTER = [
     ("/who-we-protect", "Who We Protect"),
     ("/how-it-works", "How It Works"),
     ("/insights", "Insights"),
+    # ESTATE-2026-10-25: the sweep's new public pages join the
+    # FOOTER only — the header band stays at the canonical 14 (its
+    # tightening band is load-bearing; see the WWP census pin).
+    ("/assessment", "Assessment"),
+    ("/tools", "Tools"),
+    ("/training/phishing", "Phishing Training"),
+    ("/faq", "FAQ"),
     ("/privacy", "Privacy"),
     ("/operations", "Operations"),
     (LIBRARY, "Library"),
+    ("/availability", "Availability"),
+    ("/disclosure", "Disclosure"),
     ("/report-issue", "Report an Issue"),
     ("/contact", "Contact"),
 ]
@@ -176,7 +185,8 @@ def app_mod(tmp_path_factory):
 APP_PAGES = ["/operations", "/threat-map", "/geopolitical", "/flights",
              "/about", "/services", "/who-we-protect", "/how-it-works",
              "/insights", "/insights/patch-day-is-today", "/contact",
-             "/privacy"]
+             "/privacy", "/assessment", "/tools", "/training/phishing",
+             "/faq", "/disclosure", "/availability"]
 STATIC_PAGES = ["/", "/index.html", "/report-issue", "/ticket"]
 
 

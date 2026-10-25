@@ -201,7 +201,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-10" in resp.text
+    assert "/static/style.css?v=20261025-11" in resp.text
 
 
 def test_design_system_tokens_present():
