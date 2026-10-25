@@ -294,8 +294,12 @@ def _validate_config_schema():
                         DEFAULT_CONFIG["turnstile"]["enabled"])
             tscfg["enabled"] = DEFAULT_CONFIG["turnstile"]["enabled"]
         if not isinstance(tscfg.get("secret_key"), str):
-            log.warning("config: turnstile.secret_key invalid (%r); "
-                        "using default ''", tscfg.get("secret_key"))
+            # Sweep #6 (CodeQL py/clear-text-logging-sensitive-data):
+            # never log the value of a secret-bearing key, even a
+            # malformed one — log only its type.
+            log.warning("config: turnstile.secret_key invalid "
+                        "(type %s); using default ''",
+                        type(tscfg.get("secret_key")).__name__)
             tscfg["secret_key"] = ""
     # S3-2: the remaining scalar keys are consumed with str-only
     # operations (.strip() on the flight key, header values, token
@@ -312,13 +316,16 @@ def _validate_config_schema():
                        ("threat_feeds", "abuse_ch_auth_key")):
         _sub = config.get(_sec)
         if isinstance(_sub, dict) and not isinstance(_sub.get(_key), str):
-            log.warning("config: %s.%s invalid (%r); using default ''",
-                        _sec, _key, _sub.get(_key))
+            # Same Sweep #6 rule: these are API/auth keys — type only.
+            log.warning("config: %s.%s invalid (type %s); "
+                        "using default ''",
+                        _sec, _key, type(_sub.get(_key)).__name__)
             _sub[_key] = ""
     for _key in ("briefing_token", "admin_key"):
         if not isinstance(config.get(_key), str):
-            log.warning("config: %s invalid (%r); using default ''",
-                        _key, config.get(_key))
+            # Same Sweep #6 rule: these are tokens — type only.
+            log.warning("config: %s invalid (type %s); using default ''",
+                        _key, type(config.get(_key)).__name__)
             config[_key] = ""
     # BH2-12: CORS lockdown regression guard. Starlette treats the
     # string "*" as a wildcard allowlist (`"*" in allow_origins` is a
