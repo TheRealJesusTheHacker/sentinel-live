@@ -440,20 +440,48 @@ exactly as the payments service intends.
   uvicorn 0.54.0, httpx 0.28.1 at the time of writing). The release workflow
   builds with Python 3.12; `build-exe.bat` states Python 3.11+.
 * Manual test run: `run.bat` (needs Python +
-  `pip install -r requirements.txt`); it runs uvicorn in the foreground on
-  `127.0.0.1:8443`.
-* Local exe build: `build-exe.bat` — installs the pinned requirements plus
-  PyInstaller 6.22.3 and builds into `dist\SentinelLive.exe`.
+  `pip install --require-hashes -r requirements.lock`); it runs uvicorn
+  in the foreground on `127.0.0.1:8443`.
+* Local exe build: `build-exe.bat` — installs the hash-locked build set
+  (`requirements-build.lock.txt`: the production closure plus
+  PyInstaller 6.22.3) and builds into `dist\SentinelLive.exe`.
 * Releases: publishing a GitHub **release** triggers
   `.github/workflows/build-exe.yml` (windows-latest), which builds
   `SentinelLive.exe` with PyInstaller (`--onefile --noconsole`, templates
   and static bundled, `aiosqlite` as a hidden import), generates
   `SHA256SUMS.txt`, and attaches both files to that release.
 
+### Dependencies — hash-verified installs
+
+Every Python install for this project goes through a committed,
+hash-verified lock (`pip install --require-hashes …`); a mismatch fails
+the install loudly. `requirements.txt` stays the human-edited source of
+exact pins — never install from it directly.
+
+* **Production / source installs:** `requirements.lock` — the full
+  production closure (23 packages, direct + transitive) with sha256
+  hashes. Install: `pip install --require-hashes -r requirements.lock`.
+  **Deploy-side step:** the Linux production host still installs from
+  `requirements.txt`; on the next deploy, refresh its virtualenv with
+  `pip install --require-hashes -r requirements.lock` (from the repo
+  root, in the service's virtualenv, before restarting the service) so
+  production runs exactly the locked closure.
+* **EXE build:** `requirements-build.lock.txt` (source:
+  `requirements-build.txt` = `requirements.txt` + PyInstaller 6.22.3),
+  used by `.github/workflows/build-exe.yml` and `build-exe.bat`. It is
+  compiled with `requirements.lock` as a constraint, so its shared
+  packages are the production closure versions exactly.
+* **Tests:** `requirements-test.lock.txt` (source:
+  `requirements-test.txt` = `requirements.txt` + pytest), same
+  constraint rule.
+* **Updating:** a version bump is not landed until its lock is
+  regenerated (commands are in each lock's header) and committed in the
+  same change-set.
+
 ### Testing
 
 ```
-python -m pip install -r requirements.txt pytest
+python -m pip install --require-hashes -r requirements-test.lock.txt
 python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```

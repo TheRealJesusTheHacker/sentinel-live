@@ -1,0 +1,10 @@
+# Sentinel Live — build-only dependency set (Windows EXE build).
+# The production closure (requirements.txt) plus the PyInstaller version
+# the release build has always used, previously installed inline and
+# unhashed by .github/workflows/build-exe.yml and build-exe.bat.
+# Install the hashed lock instead:
+#   pip install --require-hashes -r requirements-build.lock.txt
+# requirements.txt stays the human-edited source; this file only adds
+# the build tool on top of it.
+-r requirements.txt
+pyinstaller==6.22.3

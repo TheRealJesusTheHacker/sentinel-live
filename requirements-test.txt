@@ -1,0 +1,8 @@
+# Sentinel Live — local test-runner set.
+# The production closure (requirements.txt, hash-locked in
+# requirements.lock) plus pytest, for running tests/ locally.
+# Install the hashed lock instead:
+#   pip install --require-hashes -r requirements-test.lock.txt
+# Never used by production or by the EXE build.
+-r requirements.txt
+pytest==9.1.1

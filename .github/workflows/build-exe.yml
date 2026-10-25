@@ -19,7 +19,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pyinstaller==6.22.3
+        run: pip install --require-hashes -r requirements-build.lock.txt
 
       - name: Build single-file exe
         shell: pwsh
