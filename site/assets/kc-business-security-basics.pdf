@@ -1,0 +1,64 @@
+%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 3615 >>
+stream
+BT /F2 20 Tf 0.000 0.640 0.330 rg 48 736.0 Td (KC BUSINESS SECURITY BASICS) Tj ET
+BT /F1 11.5 Tf 0.350 0.380 0.350 rg 48 701.0 Td (One page of the ground that actually protects a small business.) Tj ET
+BT /F1 9.5 Tf 0.350 0.380 0.350 rg 48 682.3 Td (Sentinel Safeguard LLC - Kansas City, Missouri - By appointment only - 816-533-8418) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 655.6 Td ([ ] Change the router password.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 635.2 Td (The password your router or firewall shipped with is printed in a public manual. Change the admin) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 619.9 Td (password to a long, unique passphrase, and note where it is kept.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 591.7 Td ([ ] Turn on automatic updates.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 571.3 Td (Computers, browsers, phones, and the router itself. Attackers now use a published flaw within hours to) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 556.1 Td (days - an update waiting a week is a door standing open.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 527.9 Td ([ ] Keep backups you have actually restored.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 507.5 Td (Backups that run on their own, with one copy an attacker in your network cannot reach - and a restore) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 492.2 Td (you have tested for real. An unrestored backup is a hope, not a backup.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 464.0 Td ([ ] Turn on the second factor everywhere.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 443.6 Td (Multi-factor authentication on email and banking first, then every account that matters, for every) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 428.4 Td (person who uses them. It stops most stolen-password sign-ins cold.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 400.1 Td ([ ] Use a password manager and unique passwords.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 379.8 Td (A different password for every account, kept in a manager. Long passphrases \(four or five random words\)) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 364.5 Td (beat short, clever passwords - and reuse is how one breach becomes every account.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 336.3 Td ([ ] Lock screens, lock doors.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 315.9 Td (Screens that lock themselves after a few idle minutes, and a locked room or closet for the router and) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 300.7 Td (network gear. Shared door codes are not a lock.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 272.4 Td ([ ] Separate the guest Wi-Fi.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 252.0 Td (Visitors and personal phones on their own network; the till, the files, and the work machines on) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 236.8 Td (another. Most routers can do this in settings today.) Tj ET
+BT /F2 12 Tf 0.050 0.080 0.060 rg 48 208.6 Td ([ ] Know the first call.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 188.2 Td (Write down, on paper, who you call when a machine behaves like it is not yours - and what not to touch.) Tj ET
+BT /F1 10.5 Tf 0.050 0.080 0.060 rg 48 173.0 Td (Ours is 816-533-8418; the report page at sentinelsafeguard.net/report-issue is open around the clock.) Tj ET
+BT /F1 10 Tf 0.000 0.640 0.330 rg 48 141.7 Td (Free, in your browser, nothing sent anywhere: the ten-question check at sentinelsafeguard.net/assessment) Tj ET
+BT /F1 10 Tf 0.000 0.640 0.330 rg 48 125.2 Td (and the practice round at sentinelsafeguard.net/training/phishing. - Sentinel Safeguard LLC) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+xref
+0 7
+0000000000 65535 f 
+0000000009 00000 n 
+0000000058 00000 n 
+0000000115 00000 n 
+0000000251 00000 n 
+0000003918 00000 n 
+0000003988 00000 n 
+trailer
+<< /Size 7 /Root 1 0 R >>
+startxref
+4063
+%%EOF

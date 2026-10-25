@@ -5,10 +5,13 @@
   <h1>Contact — <span class="grn">talk to Sentinel</span></h1>
   <p class="sub">Sentinel works <strong>by appointment only</strong> —
   there are no walk-ins. Call, email, or send the form below, and a
-  time is set. This page is every way to reach the company, stated
+  time is set. The form can carry a preferred date and time window —
+  a preference, not a booking: nothing is confirmed until Sentinel
+  replies and a time is set in that reply. This page is every way to reach the company, stated
   plainly.</p>
   <nav class="svc-jump" aria-label="On this page">
     <a href="#message">Send a Message</a>
+    <a href="/assessment">Not sure what you need? Take the self-assessment</a>
     <a href="#direct">Call or Email</a>
     <a href="#what-to-include">What to Include</a>
     <a href="#emergencies">Emergencies</a>
@@ -28,6 +31,9 @@
       <div class="field"><label for="cf-name">Your name</label><input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="120"></div>
       <div class="field"><label for="cf-email">Email</label><input id="cf-email" name="email" type="email" autocomplete="email" required maxlength="160"></div>
       <div class="field field-wide"><label for="cf-subject">Subject <span class="optional">(optional)</span></label><input id="cf-subject" name="subject" type="text" maxlength="160"></div>
+      <div class="field"><label for="cf-service">What is this about? <span class="optional">(optional)</span></label><select id="cf-service" name="service"><option value="">Choose one…</option><option>Penetration testing</option><option>Cybersecurity &amp; IT</option><option>Security installs</option><option>Incident response</option><option>Custom websites &amp; software</option><option>Not sure yet</option></select></div>
+      <div class="field"><label for="cf-pref-date">Preferred date <span class="optional">(optional)</span></label><input id="cf-pref-date" name="pref_date" type="date"></div>
+      <div class="field"><label for="cf-pref-window">Preferred time <span class="optional">(optional)</span></label><select id="cf-pref-window" name="pref_window"><option value="">No preference</option><option>Morning</option><option>Afternoon</option><option>Evening</option></select></div>
       <div class="field field-wide"><label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="5" required maxlength="5000" placeholder="What are you building, what’s breaking, or what keeps you up at night?"></textarea></div>
       <div class="field field-wide"><div class="cf-turnstile" data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"></div></div>
       <div class="form-foot"><button class="btn-send" type="submit" id="cf-submit">Send message</button><p class="form-status" id="cf-status" role="status" aria-live="polite"></p></div>
@@ -120,6 +126,9 @@
       name:document.getElementById('cf-name').value.trim(),
       email:document.getElementById('cf-email').value.trim(),
       subject:document.getElementById('cf-subject').value.trim(),
+      service:document.getElementById('cf-service').value,
+      pref_date:document.getElementById('cf-pref-date').value,
+      pref_window:document.getElementById('cf-pref-window').value,
       message:document.getElementById('cf-message').value.trim(),
       'cf-turnstile-response':tsToken()
     };

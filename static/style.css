@@ -585,10 +585,11 @@ section { margin-bottom: 1.5em; }
   letter-spacing: .09em; text-transform: uppercase; color: var(--dim); margin: 0;
 }
 .contact-form .optional { text-transform: none; letter-spacing: 0; opacity: .75; }
-.contact-form input, .contact-form textarea {
+.contact-form input, .contact-form textarea, .contact-form select {
   width: 100%; padding: .7em .85em; border: 1px solid var(--line); border-radius: var(--r-s);
   background: #000; color: var(--txt); font: inherit; font-size: .95em;
 }
+.contact-form input[type="date"] { color-scheme: dark; }
 .contact-form textarea { resize: vertical; min-height: 110px; }
 .contact-form .form-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 1em; flex-wrap: wrap; }
 .contact-form .btn-send[disabled] { opacity: .6; cursor: wait; }
@@ -606,4 +607,99 @@ section { margin-bottom: 1.5em; }
      who asked for no motion must never meet a hidden element, even
      if the shared script has not run. */
   html.js .rv, html.js .rvf { opacity: 1 !important; transform: none !important; }
+}
+
+/* Estate sweep 2026-10-25: the new public pages (assessment, tools,
+   phishing training, FAQ, availability) in the shared language, the
+   accessibility pass, and the Insights print sheet. Everything is
+   built from the existing tokens — no new colors. */
+
+/* Accessibility: a visible focus for keyboard visitors everywhere,
+   and a skip link that appears only when it is being used. */
+:focus-visible { outline: 2px solid var(--grn); outline-offset: 2px; }
+.skip-link {
+  position: absolute; left: 1em; top: -4em; z-index: 2000;
+  background: var(--grn); color: #04120a; font-weight: 700;
+  padding: .6em 1em; border-radius: var(--r-s); transition: top .18s ease;
+}
+.skip-link:focus { top: 1em; text-decoration: none; }
+
+/* Assessment */
+.assess-form { max-width: 68ch; }
+.assess-q {
+  border: 1px solid var(--line); border-radius: var(--r-m);
+  background: var(--surf); padding: 1.1em 1.3em; margin: 0 0 1em;
+}
+.assess-q legend {
+  font-family: var(--font-disp); font-weight: 700; font-size: 1.02em;
+  color: #fff; padding: 0 .3em; max-width: 62ch;
+}
+.assess-means { color: var(--dim); font-size: .93em; margin: .3em 0 .8em; }
+.assess-means strong { color: var(--txt); }
+.assess-opts { display: flex; flex-wrap: wrap; gap: .5em 1.4em; }
+.assess-opts label {
+  display: inline-flex; align-items: center; gap: .45em; margin: 0;
+  min-height: 44px; cursor: pointer; font-weight: 600;
+}
+.assess-opts input { accent-color: var(--grn-dim); width: 1.15em; height: 1.15em; }
+.assess-list { max-width: 68ch; line-height: 1.6; }
+.assess-list li { margin: .55em 0; }
+.assess-form .form-foot { display: flex; align-items: center; gap: 1em; flex-wrap: wrap; }
+
+/* Tools */
+.tool-out {
+  font-family: var(--font-mono); font-size: 1.25em; font-weight: 600;
+  color: var(--grn); word-break: break-all; margin: .2em 0 .8em;
+}
+.tool-row { display: flex; flex-wrap: wrap; gap: .6em 1.4em; align-items: center; margin: .7em 0; }
+.tool-row label { display: inline-flex; align-items: center; gap: .45em; margin: 0; min-height: 44px; cursor: pointer; }
+.tool-row input[type="checkbox"] { accent-color: var(--grn-dim); width: 1.15em; height: 1.15em; }
+.tool-meter {
+  height: 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: #000; overflow: hidden; margin: .8em 0 .4em; max-width: 68ch;
+}
+.tool-meter-fill {
+  height: 100%; width: 0; background: linear-gradient(90deg, var(--grn-dim), var(--grn));
+  transition: width .25s ease;
+}
+
+/* Phishing training */
+.ph-card {
+  background: var(--surf); border: 1px solid var(--line); border-radius: var(--r-m);
+  padding: 1.2em 1.4em; margin: 0 0 1.2em; max-width: 68ch; box-shadow: var(--shadow-1);
+}
+.ph-mock {
+  background: var(--panel); border: 1px solid var(--line-soft);
+  border-radius: var(--r-s); padding: 1em 1.1em; margin-bottom: .9em;
+}
+.ph-kind {
+  font-family: var(--font-mono); font-size: .72em; letter-spacing: .12em;
+  text-transform: uppercase; color: var(--amber); margin: 0 0 .6em;
+}
+.ph-from, .ph-subj { margin: .25em 0; font-weight: 600; }
+.ph-subj { color: #fff; }
+.ph-body { margin: .6em 0 0; line-height: 1.6; }
+.ph-why {
+  border-left: 3px solid var(--grn-dim); padding-left: .9em;
+  line-height: 1.6; max-width: 62ch;
+}
+.ph-card button[disabled] { opacity: .55; cursor: default; }
+
+/* FAQ */
+.faq-item { max-width: 68ch; margin-bottom: 1.6em; }
+.faq-item h2 { font-size: 1.22em; }
+
+/* Print: Insights posts on paper — dark screens are for screens.
+   A light sheet, black text, no chrome, links as plain text. The
+   palette guard's tokens still apply: this is #fff and #000. */
+@media print {
+  body { background: #fff; color: #000; }
+  header.topbar, footer, .skip-link { display: none !important; }
+  main { max-width: none; padding: 0; animation: none; }
+  html.js .rv, html.js .rvf { opacity: 1 !important; transform: none !important; }
+  .ins-post { max-width: none; }
+  .ins-post h1, .ins-body h2, .ins-body h3 { color: #000; }
+  .ins-date, .ins-dek, .ins-fine { color: #000; }
+  .ins-body a, .ins-post a { color: #000; text-decoration: underline; }
+  h2 { background: none; border-bottom-color: #000; }
 }

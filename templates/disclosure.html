@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+{% block title %}Responsible Disclosure{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Responsible disclosure — <span class="grn">found something? Tell us straight</span></h1>
+  <p class="sub">Sentinel Safeguard tests other people's systems
+  for a living, with permission and in writing. This page is the
+  same courtesy extended the other way: if you find a security
+  problem in this website or in Sentinel's own systems, here is
+  where it goes and what happens next.</p>
+</section>
+
+<section class="svc rv" id="where">
+  <p class="svc-kicker">Where it goes</p>
+  <h2>Two doors, both answered</h2>
+  <p class="svc-what">Use whichever fits the finding:</p>
+  <div class="svc-cols">
+    <div>
+      <h3>The report page</h3>
+      <p><a href="/report-issue">sentinelsafeguard.net/report-issue</a>
+      — the same page clients use, monitored directly by Sentinel.
+      Pick the priority that honestly fits the issue.</p>
+    </div>
+    <div>
+      <h3>Email</h3>
+      <p><a href="mailto:sentinel@sentinelsafeguard.net">sentinel@sentinelsafeguard.net</a>
+      — Sentinel's own mail, on Sentinel's own server. The
+      machine-readable version of this page lives at
+      <a href="/.well-known/security.txt">/.well-known/security.txt</a>,
+      in the standard format (RFC 9116) that security tools look
+      for.</p>
+    </div>
+  </div>
+</section>
+
+<section class="svc rv" id="include">
+  <p class="svc-kicker">What helps</p>
+  <h2>What to include</h2>
+  <p class="svc-what">A clear description of the issue and what it
+  could allow, the address or page where you found it, and the
+  steps to reproduce it, if you have them. Screenshots or a short
+  recording help. You do not need a polished report — a plain,
+  specific note beats a formal, vague one.</p>
+  <p class="svc-what">You can expect an acknowledgment, and — if
+  the issue is confirmed — a fix that is prioritized, with credit
+  in the release notes for the fix, unless you would rather stay
+  unnamed.</p>
+</section>
+
+<section class="svc rv" id="lines">
+  <p class="svc-kicker">The lines</p>
+  <h2>Good faith, drawn plainly</h2>
+  <p class="svc-what">Research done in good faith — looking for
+  problems, proving them with the smallest demonstration that
+  works, and reporting them here — is welcome and will be met in
+  the same spirit. The lines are the obvious ones: do not touch,
+  change, download, or keep anyone else's data; do not run
+  anything that degrades the site for other people; and stop and
+  report once a problem is proven, instead of widening it. Those
+  lines are what separate research from the thing Sentinel exists
+  to stop.</p>
+  <p class="svc-note">Found a problem somewhere else — a system
+  that is not Sentinel's? That is not a disclosure; that is the
+  start of an engagement, and it runs authorization-first like
+  everything else here: see the <a href="/faq">FAQ</a> and
+  <a href="/how-it-works">How It Works</a>.</p>
+</section>
+{% endblock %}

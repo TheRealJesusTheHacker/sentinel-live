@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Security Self-Assessment{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Security self-assessment — <span class="grn">ten questions, answered honestly</span></h1>
+  <p class="sub">Ten plain-language questions about the basics that
+  decide whether a bad day stays a bad day. Answer for how things
+  actually are today — not how they are supposed to be — and you get
+  a score and a short checklist built from your answers, right here
+  on the page.</p>
+  <p class="svc-note"><strong>Nothing you answer leaves this
+  page.</strong> The scoring runs in your browser, on your device.
+  Nothing is sent to Sentinel, stored, or tracked — reload the page
+  and it is gone. If you want to talk about the result, that is what
+  the <a href="/contact">contact page</a> is for, and what you share
+  there is your call.</p>
+</section>
+
+<section class="svc rv" id="questions">
+  <p class="svc-kicker">The questions</p>
+  <h2>How does your business stand today?</h2>
+  <form id="assess-form" class="assess-form">
+    {% set qs = [
+      ("router", "Has the admin password on your router or firewall been changed from the one it shipped with?",
+       "The password printed in the manual — the one anyone can look up — is no longer the password on the box that guards your network."),
+      ("updates", "Do your computers and your router install updates on their own, without someone remembering?",
+       "Automatic updates are on for operating systems, browsers, and the router or firewall — nobody has to remember patch day."),
+      ("backups", "If every computer in the building died tonight, could you get your files back — and have you actually tried?",
+       "Backups run on their own, a copy lives somewhere an attacker in your network cannot reach, and a restore has been tested for real, not just scheduled."),
+      ("mfa", "Does signing in to email and banking take a second step — a code or a prompt on your phone?",
+       "Multi-factor authentication is on for email, banking, and every account that matters, for every person who uses them."),
+      ("passwords", "Does every person here use a different password for every account — ideally kept in a password manager?",
+       "No password is reused between accounts, and a password manager (or an equally reliable system) keeps track of them."),
+      ("wifi", "Is your guest Wi-Fi a separate network from the one your work computers and records live on?",
+       "Visitors and personal phones get their own network; the till, the files, and the work machines sit on another."),
+      ("locks", "Do screens lock themselves when someone walks away, and can only the right people get into the building and the server or network gear?",
+       "Screens lock on a timer, doors and closets with network gear stay locked, and keys and codes are not shared around."),
+      ("training", "Could everyone here spot a fake invoice email or a phony “your account is locked” message?",
+       "The people who open email and pay bills know the tells of a phishing message — and know it is safe to stop and ask. Try the practice round on the <a href=\"/training/phishing\">phishing training page</a>."),
+      ("antivirus", "Is protective software running and current on every computer — not just most of them?",
+       "Every machine runs up-to-date antivirus or endpoint protection, including the one in the back office nobody thinks about."),
+      ("plan", "If you found a machine behaving like it was not yours at 9 a.m. tomorrow, does everyone know the first call to make?",
+       "There is a short written plan — who to call, what to unplug, what not to touch — and the people here know where it is."),
+    ] %}
+    {% for key, question, yes_means in qs %}
+    <fieldset class="assess-q" data-key="{{ key }}">
+      <legend>{{ loop.index }}. {{ question }}</legend>
+      <p class="assess-means"><strong>“Yes” means:</strong> {{ yes_means | safe }}</p>
+      <div class="assess-opts" role="radiogroup" aria-label="Question {{ loop.index }}">
+        <label><input type="radio" name="q-{{ key }}" value="yes"> Yes</label>
+        <label><input type="radio" name="q-{{ key }}" value="partly"> Partly</label>
+        <label><input type="radio" name="q-{{ key }}" value="no"> No</label>
+        <label><input type="radio" name="q-{{ key }}" value="unsure"> Not sure</label>
+      </div>
+    </fieldset>
+    {% endfor %}
+    <div class="form-foot">
+      <button class="btn-send" type="submit" id="assess-submit">See my score</button>
+      <p class="form-status" id="assess-status" role="status" aria-live="polite"></p>
+    </div>
+  </form>
+</section>
+
+<section class="svc rv" id="results" hidden>
+  <p class="svc-kicker">Your result</p>
+  <h2>Score: <span id="assess-score" class="grn"></span> / 100</h2>
+  <p class="svc-what" id="assess-verdict"></p>
+  <h3>Your checklist — start at the top</h3>
+  <ul class="assess-list" id="assess-list"></ul>
+  <p class="svc-what" id="assess-clean" hidden>Every question came
+  back “yes.” Keep the restore tests and the updates honest, and
+  re-run this check when anything in the business changes.</p>
+  <p class="svc-what">One page to keep:
+  <a href="/assets/kc-business-security-basics.pdf" download>The KC
+  Business Security Basics checklist (PDF)</a> — the same basics on
+  one printable page.</p>
+  <p><a class="btn-link" href="/contact">Talk to Sentinel about the gaps &rarr;</a>
+  &nbsp;&nbsp;
+  <a class="btn-link" href="/training/phishing">Practice spotting phishing &rarr;</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script>
+(function(){
+  var FIX = {
+    router: "Change the router/firewall admin password to a long, unique passphrase, and write down where it is kept. The shipped password is printed in a public manual.",
+    updates: "Turn on automatic updates for every computer, browser, and the router/firewall itself — then check once that they really are on.",
+    backups: "Set up backups that run on their own, keep one copy an attacker in your network cannot reach, and restore a few files as a real test. A backup you have never restored is a hope, not a backup.",
+    mfa: "Turn on multi-factor authentication for email and banking first, then every account that matters — for every person, not just the owner.",
+    passwords: "Get a password manager, put every work account in it, and change any password that is reused anywhere. Long passphrases beat short complicated ones — the <a href=\"/tools\">tools page</a> makes them.",
+    wifi: "Put guests and personal phones on their own Wi-Fi network, separate from work computers and records. Most routers can do this in settings today.",
+    locks: "Set screens to lock after a few idle minutes, and lock the room or closet that holds the router and network gear. Stop sharing door codes.",
+    training: "Run the free practice round on the <a href=\"/training/phishing\">phishing training page</a> with everyone who opens email — and make “stop and ask” the house rule.",
+    antivirus: "Check every single computer — including the back-office one — for protective software that is installed, running, and current.",
+    plan: "Write the one-page plan: who to call first (Sentinel's number is 816-533-8418), what to unplug, what not to touch. Put it where people can find it at 9 a.m. on a bad day."
+  };
+  var LABEL = {
+    router: "Router & firewall password", updates: "Automatic updates",
+    backups: "Backups, restore-tested", mfa: "Multi-factor authentication",
+    passwords: "Unique passwords", wifi: "Separate guest Wi-Fi",
+    locks: "Locks & screen locks", training: "Spotting phishing",
+    antivirus: "Protective software", plan: "Incident plan"
+  };
+  var POINTS = { yes: 10, partly: 5, no: 0, unsure: 0 };
+  var form = document.getElementById('assess-form');
+  var status = document.getElementById('assess-status');
+  form.addEventListener('submit', function(ev){
+    ev.preventDefault();
+    var keys = Object.keys(FIX), score = 0, gaps = [], missing = [];
+    keys.forEach(function(k){
+      var picked = form.querySelector('input[name="q-' + k + '"]:checked');
+      if (!picked) { missing.push(k); return; }
+      score += POINTS[picked.value];
+      if (picked.value !== 'yes') gaps.push({k: k, v: picked.value});
+    });
+    if (missing.length) {
+      status.textContent = 'Answer every question to get a score — ' +
+        missing.length + ' still open. “Not sure” counts as an answer (and as a gap worth closing).';
+      var first = form.querySelector('fieldset[data-key="' + missing[0] + '"]');
+      if (first) first.scrollIntoView({behavior: 'smooth', block: 'center'});
+      return;
+    }
+    status.textContent = '';
+    // Biggest risks first: "no" and "not sure" (0 points) ahead of "partly".
+    gaps.sort(function(a, b){ return POINTS[a.v] - POINTS[b.v]; });
+    var list = document.getElementById('assess-list');
+    list.innerHTML = '';
+    gaps.forEach(function(g){
+      var li = document.createElement('li');
+      li.innerHTML = '<strong>' + LABEL[g.k] + ':</strong> ' + FIX[g.k];
+      list.appendChild(li);
+    });
+    document.getElementById('assess-clean').hidden = gaps.length !== 0;
+    document.getElementById('assess-score').textContent = score;
+    var verdict = document.getElementById('assess-verdict');
+    if (score >= 90) verdict.textContent = 'The basics are genuinely in place. What remains is keeping them true as people and systems change.';
+    else if (score >= 65) verdict.textContent = 'The foundation is there, with a few open doors. The checklist below is ordered so the widest gaps close first.';
+    else if (score >= 40) verdict.textContent = 'Some protection is in place, but the gaps below are the ones real attacks walk through. They are all closable — most in an afternoon each.';
+    else verdict.textContent = 'Most of the basics are open right now. That is fixable, and it is fixable in order: start at the top of the checklist, one item at a time.';
+    var results = document.getElementById('results');
+    results.hidden = false;
+    results.scrollIntoView({behavior: 'smooth', block: 'start'});
+  });
+})();
+</script>
+{% endblock %}

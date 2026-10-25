@@ -1,4 +1,6 @@
-Contact: mailto:Sentinelsafeguard@outlook.com
-Expires: 2027-10-23T12:00:00-05:00
+Contact: https://sentinelsafeguard.net/report-issue
+Contact: mailto:sentinel@sentinelsafeguard.net
+Expires: 2027-10-25T17:00:00-05:00
 Preferred-Languages: en
 Canonical: https://sentinelsafeguard.net/.well-known/security.txt
+Policy: https://sentinelsafeguard.net/disclosure

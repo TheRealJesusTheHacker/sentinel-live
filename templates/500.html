@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Something broke{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <p class="svc-kicker">Error 500</p>
+  <h1>Something on <span class="grn">our side broke.</span></h1>
+  <p class="sub">The page you asked for hit an error on Sentinel's
+  server — that is ours to fix, not yours. Trying again in a few
+  minutes is reasonable; if it keeps happening, the report page
+  below reaches Sentinel directly.</p>
+</section>
+
+<section class="rv">
+  <p><a class="btn-link" href="/">Back to the front door &rarr;</a><br>
+  <a class="btn-link" href="/report-issue">Report the problem &rarr;</a><br>
+  <a class="btn-link" href="/contact">Send a message &rarr;</a></p>
+</section>
+{% endblock %}

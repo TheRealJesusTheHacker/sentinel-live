@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Availability{% endblock %}
+{% block head %}<meta http-equiv="refresh" content="300">{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Availability — <span class="grn">is it up, measured honestly</span></h1>
+  <p class="sub">This page reads the site's own check log directly:
+  a small monitor on Sentinel's server tests each service below
+  about every five minutes and writes down what it found. The
+  numbers here are computed from that log — nothing is estimated,
+  averaged from anywhere else, or filled in for days the checks
+  were not running.</p>
+</section>
+
+{% if not avail.available %}
+<section class="svc rv">
+  <p class="svc-note"><strong>Checks are being set up.</strong>
+  The monitor's log does not have entries yet, so this page has
+  nothing honest to show. The moment checks start landing, this
+  page reports them — with the date they began, stated below
+  wherever the numbers appear.</p>
+</section>
+{% else %}
+<section class="svc rv">
+  <p class="svc-kicker">Checking since {{ avail.since_long }}</p>
+  <h2>{% if avail.all_ok %}Everything checked is answering{% else %}Some checks are failing — see below{% endif %}</h2>
+  <p class="svc-what">Last check: {{ avail.last_long }} (America/Chicago).
+  {% if avail.stale %}<strong>That is longer ago than the checks
+  should take</strong> — treat the states below as the last known,
+  not the current, until a newer check lands.{% endif %}
+  Uptime is each service's share of successful checks over the
+  window the log covers — at most the last 30 days.</p>
+  <div class="tablewrap">
+  <table class="status-table">
+    <thead><tr><th scope="col">Service</th><th scope="col">Now</th><th scope="col">Uptime</th><th scope="col">Checks</th><th scope="col">Last response</th></tr></thead>
+    <tbody>
+    {% for row in avail.rows %}
+      <tr>
+        <td>{{ row.label }}</td>
+        <td>{% if row.ok %}<span class="badge ok">Up</span>{% else %}<span class="badge error">Down</span>{% endif %}</td>
+        <td>{{ row.uptime }}%</td>
+        <td>{{ row.total }}</td>
+        <td>{{ row.ms }} ms</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="dim">This page refreshes itself every five minutes.
+  “Now” always means the most recent check in the log — if the
+  monitor itself stops, the stale note above says so rather than
+  letting old green sit here pretending to be live.</p>
+  <p class="svc-what">Mail services are the Sentinel Mail checks
+  (receiving, sending, and delivery ports answering). The Command
+  gate is the locked sign-in gate for Sentinel Command — the gate
+  answering is the healthy state; it shows no data to anyone.</p>
+  <p><a class="btn-link" href="/report-issue">Something not working for you? Report it &rarr;</a></p>
+</section>
+{% endif %}
+{% endblock %}

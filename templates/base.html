@@ -6,6 +6,15 @@
 <meta name="description" content="Sentinel Safeguard live operations — public threat, geopolitical, and flight tracking for Kansas City, MO.">
 <meta name="robots" content="noindex, nofollow">
 <meta name="theme-color" content="#060806">
+<meta property="og:site_name" content="Sentinel Safeguard LLC">
+<meta property="og:title" content="{% block og_title %}Sentinel Safeguard — cybersecurity &amp; IT for the Kansas City metro{% endblock %}">
+<meta property="og:description" content="{% block og_description %}Practical cybersecurity, IT, penetration testing, and on-site security work for Kansas City metro businesses and homes. By appointment only.{% endblock %}">
+<meta property="og:type" content="{% block og_type %}website{% endblock %}">
+<meta property="og:url" content="https://sentinelsafeguard.net{{ request.url.path }}">
+<meta property="og:image" content="https://sentinelsafeguard.net/assets/sentinel-safeguard-logo.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://sentinelsafeguard.net/assets/sentinel-safeguard-logo.jpg">
+<link rel="alternate" type="application/rss+xml" title="Sentinel Safeguard — Insights" href="/insights/feed.xml">
 <title>{% block title %}Sentinel Safeguard{% endblock %} — Sentinel Safeguard LLC</title>
 <link rel="icon" type="image/jpeg" href="/assets/sentinel-safeguard-mark.jpg">
 <link rel="apple-touch-icon" href="/assets/sentinel-safeguard-mark.jpg">
@@ -13,10 +22,11 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@90..110,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>document.documentElement.classList.add('js');</script>
-<link rel="stylesheet" href="/static/style.css?v=20261025-10">
+<link rel="stylesheet" href="/static/style.css?v=20261025-11">
 {% block head %}{% endblock %}
 </head>
 <body>
+<a class="skip-link" href="#main">Skip to content</a>
 <header class="topbar">
   <a class="brand" href="/">
     <img class="brand-logo" src="/assets/sentinel-safeguard-mark.jpg" alt="" width="66" height="44">
@@ -39,7 +49,7 @@
     <a class="nav-cta{% if request.url.path == '/contact' %} active{% endif %}" href="/contact"{% if request.url.path == '/contact' %} aria-current="page"{% endif %}>Contact</a>
   </nav>
 </header>
-<main>
+<main id="main">
 {% block content %}{% endblock %}
 </main>
 <footer>
@@ -53,9 +63,15 @@
     <a href="/who-we-protect">Who We Protect</a>
     <a href="/how-it-works">How It Works</a>
     <a href="/insights">Insights</a>
+    <a href="/assessment">Assessment</a>
+    <a href="/tools">Tools</a>
+    <a href="/training/phishing">Phishing Training</a>
+    <a href="/faq">FAQ</a>
     <a href="/privacy">Privacy</a>
     <a href="/operations">Operations</a>
     <a href="https://command.sentinelsafeguard.net/library">Library</a>
+    <a href="/availability">Availability</a>
+    <a href="/disclosure">Disclosure</a>
     <a href="/report-issue">Report an Issue</a>
     <a href="/contact">Contact</a>
   </nav>
