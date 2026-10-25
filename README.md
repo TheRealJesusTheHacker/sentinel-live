@@ -77,6 +77,12 @@ a public port.
   from the daily briefings and the owner's story posts and are published
   only after the owner's approval; the gated news briefing is never linked
   or referenced from the notebook.
+- **Privacy page:** `/privacy` states the site's data handling in plain
+  language — what the forms collect, the visitor log and its 90-day
+  retention, the one first-party cookie (`svid`), the named third parties
+  (Cloudflare, Google Fonts, Esri, unpkg), what the site never does, and
+  how to ask for a submission to be deleted. Every claim on it traces to
+  a verified inventory of the code's actual data flows.
 - **Form intake with no accounts:** contact messages, Get Help tickets (the
   API returns the new `ticket_id`), and newsletter signups (duplicate emails
   still return success, so the endpoint does not reveal who is subscribed).
@@ -107,6 +113,7 @@ a public port.
 | `/contact` | Contact — the dedicated contact page: the homepage contact form replicated exactly (same fields, Turnstile widget, and `/api/contact` payload), the direct phone/email block, what-to-include guidance, an emergencies strip to `/report-issue`, and pointers to `/how-it-works` and `/who-we-protect`; by appointment only, and no response-time promises anywhere |
 | `/insights` | Insights — the public notebook: dated cards for every published note, newest first, generated from the post files in `insights/` |
 | `/insights/<slug>` | One Insights note — what happened, why it matters in the Kansas City metro, and what to do, closing with a concrete action and an educational-guidance line; an unknown slug is a plain 404 |
+| `/privacy` | Privacy — what the site collects and why (forms, visitor log), the `svid` cookie, what the site never does, the third parties a request touches, retention (90-day log; submissions until deleted), and the data-request contact |
 | `/report-issue` | Public Report an Issue page — no-login ticket intake form (`/ticket` serves the identical page) |
 | `/threat-map` | Live cyber threat map — attacks observed by the SANS DShield sensor network, refreshed every 5 min by default (keyless). Optional free abuse.ch key adds ThreatFox malware-family enrichment |
 | `/geopolitical` | Geopolitical news feed + hotspot map with per-story impact notes (refreshed every 15 min by default) |
@@ -127,7 +134,7 @@ server.
 Public means public, and the rest is gated — this split is the owner's
 standing order for any public deployment of this code:
 
-- **Public:** `/`, `/operations`, `/about`, `/services`, `/who-we-protect`, `/how-it-works`, `/contact`, `/insights`, `/insights/<slug>`, `/report-issue`,
+- **Public:** `/`, `/operations`, `/about`, `/services`, `/who-we-protect`, `/how-it-works`, `/contact`, `/insights`, `/insights/<slug>`, `/privacy`, `/report-issue`,
   `/ticket`, `/flights`, `/geopolitical`, `/threat-map` and their read
   APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
   endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),

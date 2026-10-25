@@ -113,7 +113,8 @@ def test_stylesheet_version_query_bumped(app_mod):
     # -6 is the How It Works nav-band widening (1720px).
     # -7 was the Contact page's form-panel styles; -8 is the
     # Insights notebook styles (.ins-* cards + post measure).
-    assert "/static/style.css?v=20261025-8" in resp.text
+    # -9 is the Privacy page's nav-band widening (1900px).
+    assert "/static/style.css?v=20261025-9" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

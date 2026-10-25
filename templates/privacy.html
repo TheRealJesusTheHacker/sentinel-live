@@ -1,0 +1,219 @@
+{% extends "base.html" %}
+{% block title %}Privacy{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Privacy — <span class="grn">what this site collects, and what it never does</span></h1>
+  <p class="sub">Sentinel Safeguard is a security company, so this
+  page is written the way Sentinel works: specifically, item by
+  item, with nothing swept under “we may collect data.” The short
+  version — nothing here is collected for advertising, nothing is
+  sold, and the site’s one cookie is named and explained
+  below.</p>
+  <nav class="svc-jump" aria-label="On this page">
+    <a href="#collects">What We Collect</a>
+    <a href="#cookie">The One Cookie</a>
+    <a href="#never">What We Never Do</a>
+    <a href="#third-parties">Who Else Is Involved</a>
+    <a href="#retention">How Long Things Are Kept</a>
+    <a href="#your-call">Your Data, Your Call</a>
+    <a href="#scope">Scope</a>
+  </nav>
+</section>
+
+<section class="svc rv" id="collects">
+  <p class="svc-kicker">The inventory</p>
+  <h2>What this site collects, and why</h2>
+  <p class="svc-what">Data reaches this site three ways: you send
+  a form, you file a report, or you read a page. Here is each one,
+  in full.</p>
+  <div class="svc-cols">
+    <div>
+      <h3>When you send the contact form</h3>
+      <p>The form on the homepage and the Contact page collects
+      your name, your email address, an optional subject, and your
+      message. The time it was sent and the network (IP) address
+      it came from are recorded with it — the address is how the
+      site tells a person writing in from a machine flooding the
+      form. Your message is stored in the site’s own database, on
+      Sentinel’s own server, and the only way to read it is
+      through the site’s gated admin side.</p>
+    </div>
+    <div>
+      <h3>When you file a report</h3>
+      <p>The Report an Issue page collects your name, your email
+      address, an optional phone number, a category, the priority
+      you pick, a subject, and your message — with the time and
+      network address recorded the same way, into the same
+      database behind the same gate. It exists so a problem you
+      report can be worked and answered, and for nothing
+      else.</p>
+    </div>
+  </div>
+  <p class="svc-what"><strong>When you simply read a page.</strong>
+  The site keeps a visitor log of public page views. Each entry
+  records the time, your network (IP) address, your browser’s
+  user-agent string, the page you read, the page that referred
+  you (when your browser sends one), and the country your
+  connection appears to come from, as reported by Cloudflare.
+  Entries from known bots and crawlers are marked as bots. The
+  log is how Sentinel can see that the site is being read and
+  where abuse is coming from. It covers public pages only —
+  sending a form, calling the site’s data feeds, and the gated
+  pages are not page views and are not entered in it.</p>
+</section>
+
+<section class="svc rv" id="cookie">
+  <p class="svc-kicker">Cookies</p>
+  <h2>The one cookie</h2>
+  <p class="svc-what">This site sets exactly one cookie of its
+  own. It is named <strong>svid</strong>, and it holds a random
+  number — a string of chance, not your name, not an account,
+  nothing that identifies you by itself. Its one job is the
+  visitor log above: the pages you read within the same half
+  hour are grouped as a single visit, so Sentinel counts visits
+  instead of raw page loads.</p>
+  <p class="svc-what">It is set with the HttpOnly, Secure, and
+  SameSite=Lax flags, it is refreshed as you move between public
+  pages, and it expires thirty minutes after your last one.
+  Blocking it changes nothing about how the site works for you —
+  every page loads the same; the log simply counts each page on
+  its own. This site sets no other cookies of its own.
+  Cloudflare’s bot check, on the form pages, may set cookies of
+  its own — that is covered under <a href="#third-parties">Who
+  else is involved</a>.</p>
+</section>
+
+<section class="svc rv" id="never">
+  <p class="svc-kicker">Never</p>
+  <h2>What we never do</h2>
+  <div class="svc-cols">
+    <div>
+      <h3>No advertising trackers</h3>
+      <p>Nothing on this site reports your visit to an ad
+      network, and nothing here is built to follow you around the
+      internet with ads.</p>
+    </div>
+    <div>
+      <h3>No third-party analytics</h3>
+      <p>There is no Google Analytics, no Meta pixel, and no
+      outside analytics service on this site. The only counting
+      is the first-party visitor log described above, on
+      Sentinel’s own server.</p>
+    </div>
+    <div>
+      <h3>Nothing is sold or shared for marketing</h3>
+      <p>Your information is never sold, rented, or traded, and
+      nothing you send through the forms is shared with anyone
+      for marketing. Form messages are read through the gated
+      admin side, to answer you — that is the whole list of
+      readers.</p>
+    </div>
+    <div>
+      <h3>The data pages are served from here</h3>
+      <p>The threat, flight, and news data on this site is
+      fetched by Sentinel’s server and served to you from here.
+      Your browser does not fetch it from the data sources, and
+      those sources are not told who you are.</p>
+    </div>
+  </div>
+</section>
+
+<section class="svc rv" id="third-parties">
+  <p class="svc-kicker">Third parties</p>
+  <h2>Who else is involved</h2>
+  <p class="svc-what">Running a website on the open internet
+  involves a few outside services. These are all of them, with
+  the pages each one touches:</p>
+  <div class="svc-cols">
+    <div>
+      <h3>Cloudflare</h3>
+      <p>Every request to this site passes through Cloudflare’s
+      network — it carries the connection to Sentinel’s server,
+      and it is the source of the country and connecting address
+      recorded in the visitor log. On the form pages, Cloudflare’s
+      Turnstile bot check runs in your browser to tell people
+      from bots, and Cloudflare may set cookies of its own for
+      that check. What Cloudflare sees, it handles under its own
+      privacy policy.</p>
+    </div>
+    <div>
+      <h3>Google Fonts</h3>
+      <p>Every page loads Sentinel’s typefaces from Google Fonts
+      (fonts.googleapis.com, with the font files themselves from
+      fonts.gstatic.com). As with any web request, Google sees
+      the network address the request came from.</p>
+    </div>
+    <div>
+      <h3>Esri</h3>
+      <p>The three map pages — Threat Map, Geopolitical, and
+      Flights — draw their maps with tiles your browser loads
+      from Esri’s ArcGIS servers (server.arcgisonline.com), for
+      the area of the map on screen.</p>
+    </div>
+    <div>
+      <h3>unpkg</h3>
+      <p>The same three map pages load the Leaflet map library
+      from the unpkg content delivery network.</p>
+    </div>
+  </div>
+  <p class="svc-what">Everything else — the pages, the forms, the
+  data — is served from Sentinel’s own server. Links that point
+  elsewhere, like GitHub or the Sentinel library, send nothing
+  anywhere until you click them.</p>
+</section>
+
+<section class="svc rv" id="retention">
+  <p class="svc-kicker">Retention</p>
+  <h2>How long things are kept</h2>
+  <div class="svc-cols">
+    <div>
+      <h3>Visitor log: 90 days</h3>
+      <p>Visitor log entries are deleted automatically once they
+      are 90 days old. Nothing in the log is kept longer.</p>
+    </div>
+    <div>
+      <h3>Messages and reports: until deleted</h3>
+      <p>There is no automatic deletion timer on a contact
+      message or a report you send. It stays in the site’s
+      database until Sentinel deletes it, because it is the
+      record of your request — and if you want yours removed,
+      the next section is the whole process.</p>
+    </div>
+  </div>
+  <p class="svc-what">One smaller note: the abuse-prevention
+  counter behind the forms holds network addresses in memory
+  only, for a few minutes at a time, and stores nothing.</p>
+</section>
+
+<section class="svc rv" id="your-call">
+  <p class="svc-kicker">Your call</p>
+  <h2>Your data, your call</h2>
+  <p class="svc-what">Email
+  <a href="mailto:Sentinelsafeguard@outlook.com">Sentinelsafeguard@outlook.com</a>
+  to ask what this site holds with your name or email address on
+  it, or to ask for a message or report you sent to be deleted.
+  Say roughly when you sent it, so it can be found. Requests are
+  handled by the owner personally — by hand, from the actual
+  database, not by an automated system — and Sentinel may need
+  to confirm the request really comes from you before changing
+  anything.</p>
+  <p class="svc-note">Kansas City, Missouri &middot;
+  <a href="tel:+18165338418">816-533-8418</a> &middot;
+  <a href="mailto:Sentinelsafeguard@outlook.com">Sentinelsafeguard@outlook.com</a>
+  &middot; <strong>By appointment only</strong></p>
+</section>
+
+<section class="svc rv" id="scope">
+  <p class="svc-kicker">Scope</p>
+  <h2>What this page covers</h2>
+  <p class="svc-what">This page covers sentinelsafeguard.net —
+  this website. Sentinel Mail and the Sentinel Command platform
+  are separate systems with their own sign-ins, and the work
+  Sentinel does for a client is governed by the engagement
+  paperwork described on <a href="/how-it-works">How It
+  Works</a>, not by this page.</p>
+  <p class="svc-what"><strong>Last updated: October 25,
+  2026.</strong> If what this site collects ever changes, this
+  page changes with it, and that date moves.</p>
+</section>
+{% endblock %}

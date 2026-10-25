@@ -472,7 +472,7 @@ _VISITOR_TABLE_SQL = (
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
                          "/services", "/who-we-protect", "/how-it-works", "/contact",
-                         "/insights"}
+                         "/insights", "/privacy"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -1148,6 +1148,19 @@ async def insight_post(request: Request, slug: str):
     # The app's plain 404, same shape as its other 404s — an
     # unknown note is a real 404, never a redirect or a soft 200.
     raise HTTPException(404, "Not found.")
+
+
+@app.get("/privacy", response_class=HTMLResponse)
+async def privacy(request: Request):
+    # Privacy (owner order 2026-10-25): the site's data handling
+    # stated plainly — what the forms collect, the visitor log and
+    # its 90-day retention, the one cookie (svid), the named third
+    # parties, and the never list. Every sentence traces to the
+    # verified data-flow inventory in PRIVACY-PAGE-2026-10-25:
+    # the page discloses the collection that exists and claims no
+    # absence that the inventory contradicts (it never says "we
+    # collect nothing", "no cookies", or "anonymous").
+    return templates.TemplateResponse(request, "privacy.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)

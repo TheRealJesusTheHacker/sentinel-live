@@ -93,7 +93,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 1800px) and (min-width: 861px) {
+@media (max-width: 1900px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -126,7 +126,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      band now reaches 1800px (+76 over need, matching HIW's
      margin); the row at band metrics is ~1212px, far inside the
      band, and above 1800px the base regime needs only ~1724px —
-     every width is covered with slack. */
+     every width is covered with slack.
+     PRIVACY (2026-10-25): Privacy made the nav thirteen
+     destinations plus the Contact pill. Measured the same way,
+     the nav's content is now 1512px and the header's natural
+     need ~1828px (brand 261 + gap 16 + nav 1512 + bar padding
+     38) — past the 1800px top edge, the same lapse shape as
+     every addition before it. The band now reaches 1900px
+     (+72 over need, in line with the HIW/Insights margins); the
+     row at band metrics is ~1299px, far inside the band, and
+     above 1900px the base regime needs only ~1828px — every
+     width is covered with slack. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }

@@ -31,6 +31,18 @@ Covers:
     line on post pages, and the standing accuracy prohibitions.
     Its nav addition (twelve destinations) re-opened the band
     question again — see the updated band pin.
+  * /privacy states the site's data handling, traced sentence by
+    sentence to a verified inventory of the code's data flows
+    (PRIVACY-PAGE-2026-10-25): the two forms' exact fields and
+    storage, the visitor log (IP, user agent, path, referrer,
+    Cloudflare country, bot flag) and its 90-day prune, the one
+    first-party cookie (svid), the named third parties
+    (Cloudflare, Google Fonts, Esri, unpkg), and the never list.
+    Pins assert the honest disclosures EXIST and that the page
+    never claims "we collect nothing", "no cookies", or an
+    unqualified "anonymous" — the site collects, and the page
+    says so. Its nav addition (thirteen destinations) re-opened
+    the band question again — see the updated band pin.
 
 Loads app.py from a scratch copy the same way the other suites do.
 Hermetic: no network — the data store is seeded directly.
@@ -152,6 +164,7 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
                                   "/geopolitical", "/flights", "/about",
                                   "/services", "/who-we-protect",
                                   "/how-it-works", "/contact", "/insights",
+                                  "/privacy",
                                   "/insights/the-password-on-your-router",
                                   "/insights/patch-day-is-today",
                                   "/insights/backups-you-have-tested"])
@@ -188,7 +201,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-8" in resp.text
+    assert "/static/style.css?v=20261025-9" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -404,10 +417,16 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # 1721–1724px under the 1720px top edge. The band now reaches
     # 1800px (+76 over need, HIW's margin), and this pin moved
     # with it again.
+    # Privacy (2026-10-25) is the next one after that — thirteen
+    # destinations: measured the same way, nav content is now
+    # 1512px and the natural need ~1828px (brand 261 + gap 16 +
+    # nav 1512 + bar padding 38), past the 1800px top edge. The
+    # band now reaches 1900px (+72 over need), and this pin moved
+    # with it again.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 1800px) and (min-width: 861px)" in css
+    assert "@media (max-width: 1900px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 1800px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 1900px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 
@@ -797,3 +816,128 @@ def test_insights_nav_active_and_header_link_everywhere(app_mod):
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
         assert page.text.count('href="/insights"') >= 2, path
+
+
+# ------------------------------------------------------------ privacy
+def test_privacy_page_renders_with_inventory_disclosures(app_mod):
+    # Every disclosure below traces to the verified data-flow
+    # inventory (PRIVACY-PAGE-2026-10-25): the page's value is
+    # that these statements are TRUE, so the pins assert they are
+    # PRESENT — the honest disclosures are the deliverable.
+    resp = _client(app_mod).get("/privacy")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    for section in ('id="collects"', 'id="cookie"', 'id="never"',
+                    'id="third-parties"', 'id="retention"',
+                    'id="your-call"', 'id="scope"'):
+        assert section in body, section
+    for disclosure in (
+        # the two forms, their storage, and the gate
+        "When you send the contact form",
+        "When you file a report",
+        "network (IP) address",
+        "the site’s own database",
+        "gated admin side",
+        # the visitor log, field by field
+        "visitor log",
+        "user-agent string",
+        "the page that referred you",
+        "country your connection appears to come from",
+        "marked as bots",
+        "public pages only",
+        # the one cookie, named and bounded
+        "exactly one cookie of its own",
+        "svid",
+        "HttpOnly, Secure, and",
+        "SameSite=Lax",
+        "thirty minutes after your last one",
+        "sets no other cookies of its own",
+        # the never list
+        "No advertising trackers",
+        "No third-party analytics",
+        "no Google Analytics",
+        "never sold, rented, or traded",
+        "fetched by Sentinel’s server",
+        # the third parties, named with their surfaces
+        "Cloudflare",
+        "Turnstile bot check",
+        "Google Fonts",
+        "fonts.googleapis.com",
+        "Esri",
+        "server.arcgisonline.com",
+        "unpkg",
+        # retention, stated as it actually works
+        "90 days old",
+        "no automatic deletion timer",
+        "until Sentinel deletes it",
+        "in memory only",
+        # the owner's-hand data commitment + scope + date
+        "Sentinelsafeguard@outlook.com",
+        "handled by the owner personally",
+        "separate systems with their own sign-ins",
+        'href="/how-it-works"',
+        "Last updated: October 25, 2026.",
+    ):
+        assert disclosure in body, disclosure
+
+
+def test_privacy_page_never_claims_absences_it_does_not_have(app_mod):
+    # The site collects data and sets a cookie; this page must
+    # never claim otherwise. "anonymous" is banned outright —
+    # the log pairs an IP with the visit id, so no unqualified
+    # anonymity claim is honest here. The standing prohibitions
+    # ride along.
+    body = _client(app_mod).get("/privacy").text.lower()
+    for banned in (
+        "we collect nothing",
+        "collects nothing",
+        "we don't collect",
+        "we do not collect",
+        "no data is collected",
+        "no cookies",
+        "cookie-free",
+        "we use no cookies",
+        "does not use cookies",
+        "anonymous",
+        "cyberdogs",
+        "offleash",
+        "trusted by",
+        "testimonial",
+        "our experts",
+        "our team of",
+        "our clients",
+        "clients include",
+        "satisfied clients",
+        "businesses served",
+        "starting at",
+        "$",
+        "guarantee",
+        "private security guard",
+        "private investigation",
+    ):
+        assert banned not in body, banned
+
+
+def test_privacy_page_makes_no_newsletter_claim(app_mod):
+    # Inventory verdict (PRIVACY-PAGE-2026-10-25): the newsletter
+    # endpoint and table exist in the backend, but NO public page
+    # or form submits to them — so the public privacy page stays
+    # silent about newsletter collection rather than describing
+    # a signup that does not exist.
+    body = _client(app_mod).get("/privacy").text.lower()
+    assert "newsletter" not in body
+
+
+def test_privacy_nav_active_and_header_link_everywhere(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/privacy")
+    assert 'href="/privacy" class="active"' in resp.text
+    assert "/privacy" in app_mod._VISITOR_PUBLIC_PATHS
+    for path in ("/about", "/services", "/who-we-protect",
+                 "/how-it-works", "/contact", "/insights",
+                 "/insights/patch-day-is-today", "/operations",
+                 "/threat-map", "/geopolitical", "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        # nav link + footer link on every shared-chrome page
+        assert page.text.count('href="/privacy"') >= 2, path
