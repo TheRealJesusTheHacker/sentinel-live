@@ -470,7 +470,7 @@ _VISITOR_TABLE_SQL = (
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
-                         "/services", "/who-we-protect"}
+                         "/services", "/who-we-protect", "/how-it-works"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -966,6 +966,21 @@ async def who_we_protect(request: Request):
     # world is not named still reads "this means you". Same
     # factual-only discipline as /about and /services.
     return templates.TemplateResponse(request, "who_we_protect.html", _ctx(request))
+
+
+@app.get("/how-it-works", response_class=HTMLResponse)
+async def how_it_works(request: Request):
+    # How It Works (owner order 2026-10-25): the engagement process
+    # stated plainly for a first-time buyer — reach out, talk and
+    # look, in writing and signed before work, the work, report &
+    # walkthrough, after — plus the emergencies shortcut and what
+    # Sentinel asks of the client. The paperwork named is real: the
+    # Engagement Letter, Scope of Work, Penetration Testing
+    # Authorization, and Chain of Custody are the company's final
+    # approved forms. Same factual-only discipline as /about,
+    # /services, and /who-we-protect: no prices, no invented
+    # response times or SLAs, no client history.
+    return templates.TemplateResponse(request, "how_it_works.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)

@@ -93,7 +93,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 1560px) and (min-width: 861px) {
+@media (max-width: 1720px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -107,7 +107,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      reaches 1560px, its link padding tightens to .38em, and the
      row scrolls internally (scrollbar hidden, the mobile header's
      own pattern) so the page itself can never overflow at band
-     widths, at any window size, on any page. */
+     widths, at any window size, on any page.
+     HIW (2026-10-25): How It Works made the nav eleven
+     destinations plus the Contact pill. Measured the same way,
+     the header's natural need at desktop metrics is ~1646px
+     (brand 260 + gap 16 + nav 1331 + bar padding 38), confirmed
+     empirically — the base regime fits at 1650px and overshoots
+     by ~26px at 1620px — so the 1561–1645px stretch overflowed
+     under the old top edge. The band now reaches 1720px; nothing
+     else in it changes (the row at band metrics is ~1135px, far
+     inside the band). */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }

@@ -15,6 +15,13 @@ Covers:
     type, selection, reveal states with a reduced-motion collapse),
     and the stylesheet version query moved with the CSS change.
   * The threat counters render as count-up targets (data-cu).
+  * /how-it-works renders the six engagement steps, names the four
+    real client forms exactly, carries the emergencies shortcut
+    and the what-we-ask partnership block, and none of the
+    prohibited claims — in particular no invented SLAs, guarantees,
+    or response-times. Its nav addition (eleven destinations)
+    re-opened the header-band fit question in the band pin above:
+    measured ~1646px natural need, band top now 1720px.
 
 Loads app.py from a scratch copy the same way the other suites do.
 Hermetic: no network — the data store is seeded directly.
@@ -132,7 +139,8 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
 
 @pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
                                   "/geopolitical", "/flights", "/about",
-                                  "/services", "/who-we-protect"])
+                                  "/services", "/who-we-protect",
+                                  "/how-it-works"])
 def test_public_pages_never_name_liberty(app_mod, path):
     # Privacy rule (owner, 2026-10-25): the owner's home city never
     # appears in public copy — the service area is stated as Kansas
@@ -166,7 +174,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-5" in resp.text
+    assert "/static/style.css?v=20261025-6" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -368,10 +376,15 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # the mobile header's pattern) so no page overflows at band
     # widths. Pin the values so the next nav addition re-opens the
     # question in the suite instead of silently overflowing screens.
+    # How It Works (2026-10-25) was that next addition — eleven
+    # destinations: the same real-font measurement reads a natural
+    # header need of ~1646px at desktop metrics (fits at 1650px,
+    # overshoots ~26px at 1620px), so the band's top edge moved to
+    # 1720px and this pin moved with it, exactly as designed.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 1560px) and (min-width: 861px)" in css
+    assert "@media (max-width: 1720px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 1560px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 1720px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 
@@ -386,6 +399,125 @@ def test_who_we_protect_nav_active_and_header_link_everywhere(app_mod):
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
         assert page.text.count('href="/who-we-protect"') >= 2, path
+
+
+# -------------------------------------------------------- how it works
+def test_how_it_works_page_renders_six_steps(app_mod):
+    resp = _client(app_mod).get("/how-it-works")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    for fact in (
+        'id="reach-out"',
+        'id="talk-and-look"',
+        'id="in-writing"',
+        'id="the-work"',
+        'id="report-walkthrough"',
+        'id="after"',
+        "first call to finished job",
+        "by appointment only",
+        "816-533-8418",
+        "on-site comes first",
+        "documented as it goes",
+        "Kansas City, Missouri",
+        "By appointment only",
+    ):
+        assert fact in body, fact
+    # the six step kickers render in order
+    for kicker in ("Step 01", "Step 02", "Step 03", "Step 04",
+                   "Step 05", "Step 06"):
+        assert kicker in body, kicker
+    # the steps cross-link the way the process flows
+    assert 'href="/services#penetration-testing"' in body
+    assert 'href="/services#incident-response"' in body
+    assert 'href="/report-issue"' in body
+    assert 'href="/#contact"' in body
+
+
+def test_how_it_works_names_the_real_forms(app_mod):
+    # The paperwork is real (owner order 2026-10-25): the four
+    # client forms exist as final approved documents — Engagement
+    # Letter, Scope of Work, Penetration Testing Authorization,
+    # Chain of Custody — and the page must name them exactly, with
+    # the signed-before-work rule stated, never softened.
+    body = _flat(_client(app_mod).get("/how-it-works").text)
+    for form in (
+        "Engagement Letter",
+        "Scope of Work",
+        "Penetration Testing Authorization",
+        "Chain of Custody",
+    ):
+        assert form in body, form
+    for phrase in (
+        "signed before work",
+        "no system is ever tested without it",
+        "if it is not in the Scope of Work, it does not happen",
+        "yours to keep",
+    ):
+        assert phrase in body, phrase
+
+
+def test_how_it_works_emergencies_and_asks_present(app_mod):
+    # Owner's brief: an incident in progress skips the line, and
+    # the small "what Sentinel asks of you" partnership block
+    # (access when scheduled, one decision-maker, straight answers).
+    body = _flat(_client(app_mod).get("/how-it-works").text)
+    for phrase in (
+        'id="emergencies"',
+        "skips the line",
+        "open around the clock",
+        'id="what-we-ask"',
+        "What Sentinel asks of you",
+        "Access when it is scheduled",
+        "One decision-maker",
+        "Straight answers about the environment",
+    ):
+        assert phrase in body, phrase
+
+
+def test_how_it_works_carries_no_prohibited_claims(app_mod):
+    # Accuracy pins (owner's standing rules): no prices, NO
+    # invented SLAs / guarantees / response-times — the page may
+    # mirror the site's existing contact language only — no client
+    # history, no team claims, no guards/investigations as
+    # offerings, no Cyberdogs.
+    body = _client(app_mod).get("/how-it-works").text.lower()
+    for banned in (
+        "cyberdogs",
+        "offleash",
+        "trusted by",
+        "testimonial",
+        "our experts",
+        "our team of",
+        "our clients",
+        "satisfied clients",
+        "businesses served",
+        "starting at",
+        "$",
+        "guarantee",
+        "response time",
+        "respond within",
+        "within 24",
+        "within one business day",
+        "same-day response",
+        "sla",
+        "private security guard",
+        "private investigation",
+    ):
+        assert banned not in body, banned
+
+
+def test_how_it_works_nav_active_and_header_link_everywhere(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/how-it-works")
+    assert 'href="/how-it-works" class="active"' in resp.text
+    assert "/how-it-works" in app_mod._VISITOR_PUBLIC_PATHS
+    for path in ("/about", "/services", "/who-we-protect",
+                 "/operations", "/threat-map", "/geopolitical",
+                 "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        # nav link + footer link on every shared-chrome page
+        assert page.text.count('href="/how-it-works"') >= 2, path
 
 
 def test_threat_counters_are_countup_targets(app_mod):
