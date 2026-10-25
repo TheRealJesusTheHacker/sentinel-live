@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Insights{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Insights — <span class="grn">notes from the daily watch</span></h1>
+  <p class="sub">Short, plain-language notes from Sentinel's daily
+  watch on the threats going around: what happened, why it matters
+  to a business or a home in the Kansas City metro, and what to do
+  about it. New notes land here as they are published.</p>
+</section>
+
+<section class="ins-list rv">
+  {% for post in posts %}
+  <article class="ins-card">
+    <p class="ins-date"><time datetime="{{ post.date }}">{{ post.date_long }}</time></p>
+    <h2><a href="{{ post.url }}">{{ post.title }}</a></h2>
+    <p class="ins-dek">{{ post.dek }}</p>
+    <p><a class="btn-link" href="{{ post.url }}">Read the note &rarr;</a></p>
+  </article>
+  {% else %}
+  <p class="ins-dek">The first notes are on their way.</p>
+  {% endfor %}
+</section>
+
+<section class="about-contact rv">
+  <h2>Talk to Sentinel</h2>
+  <p>Kansas City, Missouri &middot; <a href="tel:+18165338418">816-533-8418</a>
+  &middot; <a href="mailto:Sentinelsafeguard@outlook.com">Sentinelsafeguard@outlook.com</a>
+  &middot; <strong>By appointment only</strong> — call, email, or send
+  a message, and a time is set.</p>
+  <p>
+    <a class="btn-link" href="/contact">Send a message &rarr;</a>
+    &nbsp;&nbsp;
+    <a class="btn-link" href="/report-issue">Report an issue &rarr;</a>
+  </p>
+</section>
+{% endblock %}

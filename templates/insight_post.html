@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block title %}{{ post.title }}{% endblock %}
+{% block content %}
+<article class="ins-post rv">
+  <p class="ins-date"><time datetime="{{ post.date }}">{{ post.date_long }}</time>
+  &middot; Sentinel Safeguard &middot; Insights</p>
+  <h1>{{ post.title }}</h1>
+  <p class="ins-lede">{{ post.dek }}</p>
+  <div class="ins-body">
+{{ post.html | safe }}
+  </div>
+  <p class="ins-fine">Insights are educational notes drawn from
+  public reporting — general guidance for businesses and homes,
+  written in plain language. They are not a promise that any
+  single step fits every system; when a setting is one other
+  people depend on, ask before you change it.</p>
+  <p><a class="btn-link" href="/insights">&larr; All Insights</a></p>
+</article>
+{% endblock %}

@@ -93,7 +93,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 1720px) and (min-width: 861px) {
+@media (max-width: 1800px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -116,7 +116,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      by ~26px at 1620px — so the 1561–1645px stretch overflowed
      under the old top edge. The band now reaches 1720px; nothing
      else in it changes (the row at band metrics is ~1135px, far
-     inside the band). */
+     inside the band).
+     INSIGHTS (2026-10-25): Insights made the nav twelve
+     destinations plus the Contact pill. Measured the same way,
+     the nav's content is now 1425px and the header's natural
+     need ~1724px (brand 261 + nav 1425 + bar padding 38) — the
+     pill sits flush against the bar's right edge at 1721–1724px
+     with zero slack, the same failure shape in miniature. The
+     band now reaches 1800px (+76 over need, matching HIW's
+     margin); the row at band metrics is ~1212px, far inside the
+     band, and above 1800px the base regime needs only ~1724px —
+     every width is covered with slack. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }
@@ -458,6 +468,42 @@ html.js .rv.in, html.js .rvf.in { opacity: 1; transform: none; }
 .svc-feature { border-left: 2px solid var(--grn-dim); padding-left: 1.2em; }
 .svc .proof-cards { max-width: 900px; }
 .proof-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1em; margin: 1em 0; }
+
+/* Insights (2026-10-25): the public notebook — dated cards on the
+   index in the shared surface language, and a single-column
+   reading measure for a post: mono date line, display headline,
+   the dek as a lede, then the rendered body (h2 section beats,
+   tight lists, bolded action lines). Everything reuses the design
+   tokens; nothing here reaches outside the prose width. */
+.ins-list { display: grid; gap: 1em; max-width: 900px; }
+.ins-card {
+  background: var(--surf); border: 1px solid var(--line);
+  border-radius: var(--r-m); padding: 1.2em 1.4em; box-shadow: var(--shadow-1);
+}
+.ins-card h2 { margin: .2em 0 .35em; font-size: 1.35em; line-height: 1.25; }
+.ins-card h2 a { color: var(--txt); }
+.ins-card h2 a:hover { color: var(--grn); text-decoration: none; }
+.ins-card p { margin: .3em 0; }
+.ins-date {
+  font-family: var(--font-mono); font-size: .74em; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin: 0;
+}
+.ins-dek { color: var(--dim); max-width: 68ch; }
+.ins-post { max-width: 68ch; }
+.ins-post h1 {
+  font-weight: 800; font-size: clamp(1.9rem, 4.2vw, 2.6rem);
+  line-height: 1.12; letter-spacing: .01em; margin: .35em 0 .3em;
+}
+.ins-lede { font-size: 1.08em; line-height: 1.55; margin: .4em 0 1.2em; }
+.ins-body h2 { margin: 1.3em 0 .4em; font-size: 1.28em; }
+.ins-body h3 { margin: 1.1em 0 .35em; font-size: 1.08em; }
+.ins-body p { margin: .7em 0; line-height: 1.65; }
+.ins-body ul { margin: .5em 0 .9em; padding-left: 1.3em; }
+.ins-body li { margin: .35em 0; line-height: 1.6; }
+.ins-fine {
+  color: var(--dim); font-size: .9em; line-height: 1.6;
+  border-top: 1px solid var(--line); padding-top: 1em; margin-top: 2.2em;
+}
 
 /* GUI polish 2026-10-23: page fade-in, interactive states, spacing rhythm.
    Motion is decorative only — nothing waits on it — and the reduced-motion

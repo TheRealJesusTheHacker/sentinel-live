@@ -69,6 +69,14 @@ a public port.
 - **Report an Issue page:** a public, no-login ticket form (`/report-issue`,
   also linked as `/ticket`) whose submissions land in the same ticket store
   as the ticket API.
+- **Insights:** a public notebook of short, plain-language security notes
+  (`/insights`, one page per note at `/insights/<slug>`). Posts are data,
+  not pages: each is one Markdown file in the `insights/` folder (front
+  matter + a small Markdown subset) that the index generates from, newest
+  first — publishing is adding one file and deploying. Notes are distilled
+  from the daily briefings and the owner's story posts and are published
+  only after the owner's approval; the gated news briefing is never linked
+  or referenced from the notebook.
 - **Form intake with no accounts:** contact messages, Get Help tickets (the
   API returns the new `ticket_id`), and newsletter signups (duplicate emails
   still return success, so the endpoint does not reveal who is subscribed).
@@ -97,6 +105,8 @@ a public port.
 | `/who-we-protect` | Who We Protect — who the work is built for: apartment complexes & property management, senior centers & care facilities, churches & nonprofits, local service companies & trades, and residential homes & families — framed as a focus, never a fence, with an open door to every other industry |
 | `/how-it-works` | How It Works — the engagement process in six steps for a first-time buyer (reach out → talk and look → written scope signed before work → the work → report & walkthrough → after), the real paperwork named (Engagement Letter, Scope of Work, Penetration Testing Authorization, Chain of Custody), an emergencies shortcut, and what Sentinel asks of the client; no prices and no invented response times or SLAs |
 | `/contact` | Contact — the dedicated contact page: the homepage contact form replicated exactly (same fields, Turnstile widget, and `/api/contact` payload), the direct phone/email block, what-to-include guidance, an emergencies strip to `/report-issue`, and pointers to `/how-it-works` and `/who-we-protect`; by appointment only, and no response-time promises anywhere |
+| `/insights` | Insights — the public notebook: dated cards for every published note, newest first, generated from the post files in `insights/` |
+| `/insights/<slug>` | One Insights note — what happened, why it matters in the Kansas City metro, and what to do, closing with a concrete action and an educational-guidance line; an unknown slug is a plain 404 |
 | `/report-issue` | Public Report an Issue page — no-login ticket intake form (`/ticket` serves the identical page) |
 | `/threat-map` | Live cyber threat map — attacks observed by the SANS DShield sensor network, refreshed every 5 min by default (keyless). Optional free abuse.ch key adds ThreatFox malware-family enrichment |
 | `/geopolitical` | Geopolitical news feed + hotspot map with per-story impact notes (refreshed every 15 min by default) |
@@ -117,7 +127,7 @@ server.
 Public means public, and the rest is gated — this split is the owner's
 standing order for any public deployment of this code:
 
-- **Public:** `/`, `/operations`, `/about`, `/services`, `/who-we-protect`, `/how-it-works`, `/contact`, `/report-issue`,
+- **Public:** `/`, `/operations`, `/about`, `/services`, `/who-we-protect`, `/how-it-works`, `/contact`, `/insights`, `/insights/<slug>`, `/report-issue`,
   `/ticket`, `/flights`, `/geopolitical`, `/threat-map` and their read
   APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
   endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),

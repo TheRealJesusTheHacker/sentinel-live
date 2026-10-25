@@ -14,6 +14,7 @@ Logs go to ./logs/server.log (there is no console in the .exe build).
 import asyncio
 import hmac
 import csv
+import html
 import io
 import json
 import logging
@@ -470,7 +471,8 @@ _VISITOR_TABLE_SQL = (
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
-                         "/services", "/who-we-protect", "/how-it-works", "/contact"}
+                         "/services", "/who-we-protect", "/how-it-works", "/contact",
+                         "/insights"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -491,6 +493,16 @@ def _visitor_norm_path(raw: str) -> str:
     if len(p) > 1 and p.endswith("/"):
         p = p.rstrip("/") or "/"
     return p
+
+
+def _visitor_is_public(path: str) -> bool:
+    """Public-page test for the visitor log: the fixed set above,
+    plus Insights post pages — each post is logged under its own
+    path so per-post reads show in the console. (The middleware
+    only records 200s, so an unknown slug still logs nothing.)"""
+    if path in _VISITOR_PUBLIC_PATHS:
+        return True
+    return bool(re.fullmatch(r"/insights/[a-z0-9][a-z0-9-]*", path))
 
 
 def _chicago_day_start_epoch(days_ago: int = 0) -> int:
@@ -570,7 +582,7 @@ class _VisitorLogMiddleware:
             await self.app(scope, receive, send)
             return
         path = _visitor_norm_path(scope.get("path", ""))
-        if path not in _VISITOR_PUBLIC_PATHS:
+        if not _visitor_is_public(path):
             await self.app(scope, receive, send)
             return
         headers = {k.decode("latin-1").lower(): v.decode("latin-1")
@@ -912,6 +924,124 @@ async def _startup():
     log.info("Sentinel Live Server started (frozen=%s)", FROZEN)
 
 
+# ------------------------------------------------------------------ insights
+# Insights (owner order 2026-10-25): the site's public notebook.
+# Posts are DATA, not hand-built pages: one Markdown file per post
+# in the insights/ directory — YAML front matter (slug, date,
+# title, dek, optional weight) over a body in a small Markdown
+# subset (## / ### headings, "- " list items, **bold**, links).
+# The index generates from the files, newest first; a post page
+# renders from its file. Publishing is "add one file and deploy" —
+# no template surgery — and nothing auto-publishes: a file only
+# exists once the owner has approved the post in the content
+# cadence. Sources are the daily briefings (distilled,
+# outsider-safe) and the owner's story posts (2x/day cadence);
+# the gated /news briefing is a different, private layer and is
+# never linked or referenced from here.
+_INSIGHTS_DIR = res_dir("insights")
+_insights_cache = {"key": None, "posts": []}
+
+
+def _insight_inline(text: str) -> str:
+    """Inline subset on ALREADY-escaped text: links, then bold.
+    A link renders only for a site-relative or https target, so a
+    post file can never smuggle a javascript: href into the page."""
+    text = re.sub(r"\[([^\]]+)\]\((https://[^)\s]+|/[^)\s]*)\)",
+                  r'<a href="\2">\1</a>', text)
+    return re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+
+
+def _insight_body_html(body: str) -> str:
+    """Render the body subset to HTML. Every line is HTML-escaped
+    first, so the only markup in the output is the markup this
+    function itself emits."""
+    out, para, items = [], [], []
+
+    def flush_para():
+        if para:
+            out.append("<p>" + _insight_inline(" ".join(para)) + "</p>")
+            para.clear()
+
+    def flush_items():
+        if items:
+            out.append("<ul>" + "".join(
+                "<li>" + _insight_inline(i) + "</li>"
+                for i in items) + "</ul>")
+            items.clear()
+
+    for raw in body.splitlines():
+        line = raw.strip()
+        if not line:
+            flush_para()
+            flush_items()
+            continue
+        esc = html.escape(line)
+        if esc.startswith("### "):
+            flush_para()
+            flush_items()
+            out.append("<h3>" + _insight_inline(esc[4:]) + "</h3>")
+        elif esc.startswith("## "):
+            flush_para()
+            flush_items()
+            out.append("<h2>" + _insight_inline(esc[3:]) + "</h2>")
+        elif esc.startswith("- "):
+            flush_para()
+            items.append(esc[2:])
+        else:
+            flush_items()
+            para.append(esc)
+    flush_para()
+    flush_items()
+    return "\n".join(out)
+
+
+def _load_insights():
+    """Parse every insights/*.md into a post dict, newest first
+    (same-day posts order by weight, higher first, then slug).
+    Cached on the (name, mtime) fingerprint of the directory —
+    deploys restart the process, and the cache keeps repeat reads
+    free. A malformed file is logged and skipped: one bad post
+    can never take the notebook down."""
+    if not _INSIGHTS_DIR.is_dir():
+        return []
+    files = sorted(_INSIGHTS_DIR.glob("*.md"))
+    key = tuple((p.name, p.stat().st_mtime_ns) for p in files)
+    if _insights_cache["key"] == key:
+        return _insights_cache["posts"]
+    posts = []
+    for p in files:
+        try:
+            text = p.read_text(encoding="utf-8")
+            if not text.startswith("---"):
+                raise ValueError("missing front matter")
+            _, fm, body = text.split("---", 2)
+            meta = yaml.safe_load(fm) or {}
+            slug = str(meta["slug"]).strip()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", slug):
+                raise ValueError("bad slug: %r" % slug)
+            date = str(meta["date"])
+            day = datetime.strptime(date, "%Y-%m-%d").date()
+            posts.append({
+                "slug": slug,
+                "date": date,
+                "date_long": "%s %d, %d" % (
+                    day.strftime("%B"), day.day, day.year),
+                "title": str(meta["title"]).strip(),
+                "dek": str(meta["dek"]).strip(),
+                "weight": int(meta.get("weight") or 0),
+                "html": _insight_body_html(body),
+                "url": "/insights/" + slug,
+            })
+        except Exception:
+            log.warning("insights: skipping malformed post file %s",
+                        p.name)
+    posts.sort(key=lambda x: (x["date"], x["weight"], x["slug"]),
+               reverse=True)
+    _insights_cache["key"] = key
+    _insights_cache["posts"] = posts
+    return posts
+
+
 # ------------------------------------------------------------------ pages
 def _ctx(request: Request, **kw):
     base = {"request": request, "now": _utcnow()}
@@ -994,6 +1124,30 @@ async def contact(request: Request):
     # emergency channel. No response-time promises anywhere: the
     # site states none, and this page invents none.
     return templates.TemplateResponse(request, "contact.html", _ctx(request))
+
+
+@app.get("/insights", response_class=HTMLResponse)
+async def insights(request: Request):
+    # Insights (owner order 2026-10-25): the public notebook —
+    # outsider-safe notes distilled from the daily briefings and
+    # the owner's story posts, rendered from data files in the
+    # insights/ directory (see _load_insights). The gated /news
+    # briefing is never linked or referenced here: this is the
+    # curated public layer, and every post on it passed the
+    # owner's approval before its file existed.
+    return templates.TemplateResponse(
+        request, "insights.html", _ctx(request, posts=_load_insights()))
+
+
+@app.get("/insights/{slug}", response_class=HTMLResponse)
+async def insight_post(request: Request, slug: str):
+    for post in _load_insights():
+        if post["slug"] == slug:
+            return templates.TemplateResponse(
+                request, "insight_post.html", _ctx(request, post=post))
+    # The app's plain 404, same shape as its other 404s — an
+    # unknown note is a real 404, never a redirect or a soft 200.
+    raise HTTPException(404, "Not found.")
 
 
 @app.get("/operations", response_class=HTMLResponse)

@@ -6,6 +6,7 @@ py -m pip install --quiet --require-hashes -r requirements-build.lock.txt
 py -m PyInstaller --noconfirm --onefile --noconsole --name SentinelLive ^
   --add-data "templates;templates" ^
   --add-data "static;static" ^
+  --add-data "insights;insights" ^
   --hidden-import aiosqlite ^
   app.py
 echo.

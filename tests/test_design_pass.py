@@ -22,6 +22,15 @@ Covers:
     or response-times. Its nav addition (eleven destinations)
     re-opened the header-band fit question in the band pin above:
     measured ~1646px natural need, band top now 1720px.
+  * /insights is a publishing surface, not a page: posts are data
+    files in insights/ (front matter + a Markdown subset) that the
+    index generates from, newest first, and each post renders at
+    /insights/<slug>. Pins cover the three seed posts distilled
+    from the 2026-10-25 briefing (dated, defense-only, plain
+    language), the plain-404 for unknown slugs, the educational
+    line on post pages, and the standing accuracy prohibitions.
+    Its nav addition (twelve destinations) re-opened the band
+    question again — see the updated band pin.
 
 Loads app.py from a scratch copy the same way the other suites do.
 Hermetic: no network — the data store is seeded directly.
@@ -42,6 +51,8 @@ def _load_app(tmp: Path, name: str, config_text: str = "server:\n  port: 8443\n"
         shutil.copy(SRC / item, tmp / item)
     shutil.copytree(SRC / "templates", tmp / "templates")
     shutil.copytree(SRC / "static", tmp / "static")
+    if (SRC / "insights").is_dir():
+        shutil.copytree(SRC / "insights", tmp / "insights")
     (tmp / "config.yaml").write_text(config_text, encoding="utf-8")
 
     feeds_spec = importlib.util.spec_from_file_location(
@@ -140,7 +151,10 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
 @pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
                                   "/geopolitical", "/flights", "/about",
                                   "/services", "/who-we-protect",
-                                  "/how-it-works", "/contact"])
+                                  "/how-it-works", "/contact", "/insights",
+                                  "/insights/the-password-on-your-router",
+                                  "/insights/patch-day-is-today",
+                                  "/insights/backups-you-have-tested"])
 def test_public_pages_never_name_liberty(app_mod, path):
     # Privacy rule (owner, 2026-10-25): the owner's home city never
     # appears in public copy — the service area is stated as Kansas
@@ -174,7 +188,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-7" in resp.text
+    assert "/static/style.css?v=20261025-8" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -383,10 +397,17 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # header need of ~1646px at desktop metrics (fits at 1650px,
     # overshoots ~26px at 1620px), so the band's top edge moved to
     # 1720px and this pin moved with it, exactly as designed.
+    # Insights (2026-10-25) is the next one after that — twelve
+    # destinations: nav content now measures 1425px, natural need
+    # ~1724px, and the geometry probe showed the Contact pill
+    # flush against the bar's right edge (zero slack) across
+    # 1721–1724px under the 1720px top edge. The band now reaches
+    # 1800px (+76 over need, HIW's margin), and this pin moved
+    # with it again.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 1720px) and (min-width: 861px)" in css
+    assert "@media (max-width: 1800px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 1720px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 1800px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 
@@ -645,3 +666,134 @@ def test_contact_nav_pill_active_footer_and_visitor_log(app_mod):
         assert 'href="/#contact"' not in page.text, path
         # pill + footer at minimum
         assert page.text.count('href="/contact"') >= 2, path
+
+
+# ------------------------------------------------------------ insights
+_INSIGHT_SLUGS = ("the-password-on-your-router", "patch-day-is-today",
+                  "backups-you-have-tested")
+_INSIGHT_TITLES = (
+    "The password on your router is a product now",
+    "Patch day is today now",
+    "A backup you have never restored is a hope, not a backup",
+)
+
+
+def test_insights_posts_are_data_newest_first(app_mod):
+    # The notebook is a publishing surface: posts load from the
+    # insights/ files, all three seeds dated 2026-10-25, ordered
+    # by the same-day weight the author set (credentials, patch,
+    # backups — the briefing's own order).
+    posts = app_mod._load_insights()
+    assert [p["slug"] for p in posts] == list(_INSIGHT_SLUGS)
+    assert all(p["date"] == "2026-10-25" for p in posts)
+    assert all(p["date_long"] == "October 25, 2026" for p in posts)
+    assert all(p["url"] == "/insights/" + p["slug"] for p in posts)
+
+
+def test_insights_index_renders_dated_cards(app_mod):
+    resp = _client(app_mod).get("/insights")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    assert "Insights —" in body
+    assert "notes from the daily watch" in body
+    assert body.count("October 25, 2026") == 3
+    for title, slug in zip(_INSIGHT_TITLES, _INSIGHT_SLUGS):
+        assert title in body, title
+        assert 'href="/insights/%s"' % slug in resp.text, slug
+    # newest first == the weighted seed order on the page itself
+    positions = [body.index(t) for t in _INSIGHT_TITLES]
+    assert positions == sorted(positions)
+
+
+def test_insights_post_pages_render_from_files(app_mod):
+    client = _client(app_mod)
+    markers = {
+        "the-password-on-your-router": (
+            "What happened", "Why it matters here", "What to do",
+            "70,000", "Fortinet", "Palo Alto Networks",
+            "multi-factor authentication", "ten-minute version"),
+        "patch-day-is-today": (
+            "What happened", "Why it matters here", "What to do",
+            "Known Exploited Vulnerabilities", "VeloCloud",
+            "Collabora", "automatic updates", "edge first"),
+        "backups-you-have-tested": (
+            "What happened", "Why it matters here", "three-point check",
+            "One copy the network cannot reach",
+            "One restore you have actually done",
+            "One calendar entry to do it again"),
+    }
+    for slug, phrases in markers.items():
+        resp = client.get("/insights/" + slug)
+        assert resp.status_code == 200, slug
+        body = _flat(resp.text)
+        assert "October 25, 2026" in body, slug
+        for phrase in phrases:
+            assert phrase in body, (slug, phrase)
+        # the educational line and the way back, on every post
+        assert "educational notes drawn from" in body, slug
+        assert "general guidance" in body, slug
+        assert 'href="/insights"' in resp.text, slug
+        # the body renderer emitted real structure, not raw text
+        assert "<h2>What happened</h2>" in resp.text, slug
+        assert "<strong>" in resp.text, slug
+
+
+def test_insights_unknown_slug_is_plain_404(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/insights/no-such-note")
+    assert resp.status_code == 404
+    # the app's plain 404 shape — the same one its APIs give
+    assert resp.json() == {"detail": "Not found."}
+    # and the API error behavior elsewhere is undisturbed
+    assert client.get("/api/does-not-exist").status_code == 404
+
+
+def test_insights_carry_no_prohibited_claims(app_mod):
+    client = _client(app_mod)
+    paths = ["/insights"] + ["/insights/" + s for s in _INSIGHT_SLUGS]
+    for path in paths:
+        body = client.get(path).text.lower()
+        for banned in (
+            "cyberdogs",
+            "offleash",
+            "trusted by",
+            "testimonial",
+            "our experts",
+            "our team of",
+            "our clients",
+            "clients include",
+            "satisfied clients",
+            "businesses served",
+            "starting at",
+            "$",
+            "guarantee",
+            "private security guard",
+            "private investigation",
+            # the gated briefing is a private layer: never named
+            # or linked as public content from the notebook
+            "/news",
+            "daily briefing",
+        ):
+            assert banned not in body, (path, banned)
+
+
+def test_insights_nav_active_and_header_link_everywhere(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/insights")
+    assert 'href="/insights" class="active"' in resp.text
+    # a post page marks Insights active too (prefix marking)
+    post = client.get("/insights/patch-day-is-today")
+    assert 'href="/insights" class="active"' in post.text
+    assert "/insights" in app_mod._VISITOR_PUBLIC_PATHS
+    # post pages are visitor-public under their own paths, and
+    # gated paths are never visitor-public
+    assert app_mod._visitor_is_public("/insights/patch-day-is-today")
+    assert not app_mod._visitor_is_public("/admin")
+    assert not app_mod._visitor_is_public("/api/news-data")
+    for path in ("/about", "/services", "/who-we-protect",
+                 "/how-it-works", "/contact", "/operations",
+                 "/threat-map", "/geopolitical", "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        # nav link + footer link on every shared-chrome page
+        assert page.text.count('href="/insights"') >= 2, path

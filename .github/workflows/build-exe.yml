@@ -27,6 +27,7 @@ jobs:
           pyinstaller --noconfirm --onefile --noconsole --name SentinelLive `
             --add-data "templates;templates" `
             --add-data "static;static" `
+            --add-data "insights;insights" `
             --hidden-import aiosqlite `
             app.py
 
