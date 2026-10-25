@@ -131,7 +131,8 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
 
 
 @pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
-                                  "/geopolitical", "/flights", "/about"])
+                                  "/geopolitical", "/flights", "/about",
+                                  "/services"])
 def test_public_pages_never_name_liberty(app_mod, path):
     # Privacy rule (owner, 2026-10-25): the owner's home city never
     # appears in public copy — the service area is stated as Kansas
@@ -165,7 +166,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-3" in resp.text
+    assert "/static/style.css?v=20261025-4" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -189,6 +190,98 @@ def test_base_template_favicon_is_emblem_and_fonts_loaded(app_mod):
     assert 'rel="apple-touch-icon" href="/assets/sentinel-safeguard-mark.jpg"' in resp.text
     assert "family=Archivo" in resp.text
     assert "family=IBM+Plex+Mono" in resp.text
+
+
+# ---------------------------------------------------------- services
+def test_services_page_renders_five_sections(app_mod):
+    resp = _client(app_mod).get("/services")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    for fact in (
+        'id="penetration-testing"',
+        'id="cybersecurity-it"',
+        'id="security-installs"',
+        'id="incident-response"',
+        'id="custom-software"',
+        "signed written authorization",
+        "not a scare sheet",
+        "Kansas City metro",
+        "by appointment only",
+        "816-533-8418",
+        "Sentinelsafeguard@outlook.com",
+        "around the clock",
+    ):
+        assert fact in body, fact
+    # each section asks the question the visitor came with
+    assert body.count("Who it is for") == 5
+    assert body.count("What you walk away with") == 5
+    # four sections CTA to the contact form, IR to the report page
+    assert body.count('href="/#contact"') >= 5
+    assert 'href="/report-issue"' in body
+
+
+def test_services_page_carries_no_prohibited_claims(app_mod):
+    body = _client(app_mod).get("/services").text.lower()
+    for banned in (
+        "cyberdogs",
+        "offleash",
+        "backflow",
+        "trusted by",
+        "testimonial",
+        "our experts",
+        "our team of",
+        "clients include",
+        "satisfied clients",
+        "businesses served",
+        "private security guard",
+        "private investigation",
+        "starting at",
+        "$",
+    ):
+        assert banned not in body, banned
+
+
+def test_services_developer_tribute_links_public_proof(app_mod):
+    body = _flat(_client(app_mod).get("/services").text)
+    for proof in (
+        "Sentinel's President is a working developer",
+        "Technician's Toolkit",
+        "HackProof",
+        "https://github.com/TheRealJesusTheHacker/Technicians-Toolkit",
+        "https://github.com/TheRealJesusTheHacker/Sphinx/releases",
+        "https://github.com/TheRealJesusTheHacker/HackProof",
+        "built by the people who test other people's",
+        "Eight technician tools",
+        "Windows, Android, and Debian",
+    ):
+        assert proof in body, proof
+
+
+def test_services_nav_active_and_header_link_everywhere(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/services")
+    assert 'href="/services" class="active"' in resp.text
+    assert "/services" in app_mod._VISITOR_PUBLIC_PATHS
+    for path in ("/about", "/operations", "/threat-map", "/geopolitical",
+                 "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        # nav link + footer link on every shared-chrome page
+        assert page.text.count('href="/services"') >= 2, path
+
+
+def test_about_cards_crosslink_to_services_anchors(app_mod):
+    body = _flat(_client(app_mod).get("/about").text)
+    for anchor in (
+        'href="/services#penetration-testing"',
+        'href="/services#cybersecurity-it"',
+        'href="/services#security-installs"',
+        'href="/services#incident-response"',
+        'href="/services#custom-software"',
+        "Custom websites &amp; software",
+        "Built by a developer",
+    ):
+        assert anchor in body, anchor
 
 
 def test_threat_counters_are_countup_targets(app_mod):

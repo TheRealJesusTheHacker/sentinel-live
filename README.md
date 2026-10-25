@@ -92,6 +92,8 @@ a public port.
 |---|---|
 | `/` | The public front door. With the static `site/` folder present (the production deployment) this is the Sentinel Safeguard homepage, including the "Live intel, always on." preview section |
 | `/operations` | Live operations page — the threat, geopolitical, and news panels, plus "Live right now" previews of the three trackers |
+| `/about` | About the Company — who the company is, who leads it, what it does, and the proof that is already public |
+| `/services` | Services — the five lines of work in full (penetration testing, cybersecurity & IT, security installs, incident response & forensics, custom websites & software), each with who it is for and what the client walks away with |
 | `/report-issue` | Public Report an Issue page — no-login ticket intake form (`/ticket` serves the identical page) |
 | `/threat-map` | Live cyber threat map — attacks observed by the SANS DShield sensor network, refreshed every 5 min by default (keyless). Optional free abuse.ch key adds ThreatFox malware-family enrichment |
 | `/geopolitical` | Geopolitical news feed + hotspot map with per-story impact notes (refreshed every 15 min by default) |
@@ -112,11 +114,11 @@ server.
 Public means public, and the rest is gated — this split is the owner's
 standing order for any public deployment of this code:
 
-- **Public:** `/`, `/operations`, `/report-issue`, `/ticket`, `/flights`,
-  `/geopolitical`, `/threat-map` and their read APIs (`/api/threat-data`,
-  `/api/geo-data`), plus the public form endpoints (`POST /api/contact`,
-  `/api/ticket`, `/api/newsletter`), which are rate-limited and
-  Turnstile-gated as described above.
+- **Public:** `/`, `/operations`, `/about`, `/services`, `/report-issue`,
+  `/ticket`, `/flights`, `/geopolitical`, `/threat-map` and their read
+  APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
+  endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),
+  which are rate-limited and Turnstile-gated as described above.
 - **Gated:** `/admin` and `/api/admin/*` (the app's own admin rules
   below), `/news` and the briefing (including `/api/news-data`, which
   carries the briefing), `/status`, and `/health`. Stored ticket and
@@ -453,13 +455,15 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is seven files — `tests/test_hackproof_proxy.py` (22 tests),
+The suite is nine files — `tests/test_hackproof_proxy.py` (22 tests),
 `tests/test_turnstile.py` (7 tests), `tests/test_front_door.py`
 (4 tests), `tests/test_bughunt_2026_10_23.py`,
 `tests/test_visitors_2026_10_23.py` (public visitor logging),
-`tests/test_sweep5_2026_10_24.py`, and `tests/test_phase_two_a.py`
-(the Phase Two pins) — with **88 tests** in total, verified by a full
-run on 2026-10-25 (`88 passed`).
+`tests/test_sweep5_2026_10_24.py`, `tests/test_phase_two_a.py`
+(the Phase Two pins), `tests/test_design_pass.py` (the design-pass,
+About, and Services pins), and `tests/test_live_flights.py` — with
+**121 tests** in total, verified by a full run on 2026-10-25
+(`121 passed`).
 It builds the app against fake payments upstreams and covers, among other
 things:
 

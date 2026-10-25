@@ -399,6 +399,38 @@ html.js .rv.in, html.js .rvf.in { opacity: 1; transform: none; }
 .about-contact h2 { border-bottom: 0; background: none; padding-bottom: 0; margin-top: 0; }
 .btn-link { font-weight: 700; }
 
+/* Services (2026-10-25): the five lines of work in the shared panel
+   language — a mono kicker over each section rule, a two-column
+   who/walk-away split inside the prose width, the authorization and
+   after-hours notes on the same green-trimmed panel as the contact
+   block, and the developer section set apart with a green edge (it
+   is the tribute section — it earns its one accent). Cards are
+   constrained to the prose width here because .cards is a top-level
+   grid elsewhere and would stretch full-bleed inside a section. */
+.svc-jump { display: flex; flex-wrap: wrap; gap: .4em .5em; margin-top: 1em; }
+.svc-jump a {
+  display: inline-flex; align-items: center; min-height: 44px; padding: .3em .9em;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--txt); font-weight: 600;
+  transition: color .18s ease, border-color .18s ease, background-color .18s ease;
+}
+.svc-jump a:hover { color: var(--grn); border-color: var(--grn-dim); background: rgba(0,230,118,.06); text-decoration: none; }
+.svc { scroll-margin-top: 96px; }
+.svc-kicker {
+  font-family: var(--font-mono); font-size: .74em; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--dim); margin: 0 0 .4em;
+}
+.svc-what { max-width: 68ch; }
+.svc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2em; max-width: 68ch; }
+@media (max-width: 700px) { .svc-cols { grid-template-columns: 1fr; } }
+.svc-cols h3 { margin: .8em 0 .35em; font-size: 1.02em; }
+.svc-note {
+  background: var(--surf); border: 1px solid var(--grn-dim); border-radius: var(--r-m);
+  padding: 1em 1.2em; box-shadow: var(--shadow-1); max-width: 68ch;
+}
+.svc-feature { border-left: 2px solid var(--grn-dim); padding-left: 1.2em; }
+.svc .proof-cards { max-width: 900px; }
+.proof-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 1em; margin: 1em 0; }
+
 /* GUI polish 2026-10-23: page fade-in, interactive states, spacing rhythm.
    Motion is decorative only — nothing waits on it — and the reduced-motion
    block at the end turns all of it (plus the pre-existing marker pulses)

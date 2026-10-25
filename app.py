@@ -469,7 +469,8 @@ _VISITOR_TABLE_SQL = (
     " referrer TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '',"
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
-                         "/flights", "/report-issue", "/ticket", "/about"}
+                         "/flights", "/report-issue", "/ticket", "/about",
+                         "/services"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -940,6 +941,18 @@ async def about(request: Request):
     # factual-only by the owner's accuracy rules (no client history,
     # no testimonials, future services marked planned).
     return templates.TemplateResponse(request, "about.html", _ctx(request))
+
+
+@app.get("/services", response_class=HTMLResponse)
+async def services(request: Request):
+    # Services (owner order 2026-10-25): the five lines of work in
+    # full — what each is, who it is for, what the client walks away
+    # with — in the shared chrome. Same factual-only discipline as
+    # /about (no prices, no client history, no planned services
+    # listed); penetration testing is framed authorized-only, and
+    # the custom websites & software section is the owner's
+    # developer tribute, every claim linked to its public proof.
+    return templates.TemplateResponse(request, "services.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)
