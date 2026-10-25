@@ -10,7 +10,7 @@ latest release before reporting issues.
 **Do not open a public issue for a suspected vulnerability.** Report it
 privately instead:
 
-- Email: **Sentinelsafeguard@outlook.com**
+- Email: **sentinel@sentinelsafeguard.net**
 - Web: https://sentinelsafeguard.net/report-issue
 
 Please include:
