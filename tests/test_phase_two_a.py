@@ -108,6 +108,20 @@ def test_stylesheet_version_query_bumped(app_mod):
     assert "/static/style.css?v=20261025-1" in resp.text
 
 
+def test_header_uses_emblem_mark_not_full_poster(app_mod):
+    # LOGOFIX-2026-10-25: the header slot is 44px tall; the full
+    # portrait poster squeezed into it renders as an illegible dark
+    # tile — effectively invisible on the dark headers (owner report,
+    # browser-census proven). The header must use the derived emblem
+    # lockup (assets/sentinel-safeguard-mark.jpg, served from the
+    # site tree); the full poster stays on the homepage hero, the
+    # social cards, and the Command sign-in screen.
+    resp = _client(app_mod).get("/operations")
+    assert resp.status_code == 200
+    assert 'src="/assets/sentinel-safeguard-mark.jpg"' in resp.text
+    assert 'class="brand-logo" src="/assets/sentinel-safeguard-logo.jpg"' not in resp.text
+
+
 # ------------------------------------------------------------- flights
 def test_flights_legend_and_note_above_map(app_mod):
     resp = _client(app_mod).get("/flights")
