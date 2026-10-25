@@ -35,6 +35,7 @@ except Exception:  # pragma: no cover — zoneinfo is stdlib on py3.9+
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from urllib.parse import quote, urlparse
+from xml.sax.saxutils import escape as _xml_escape
 
 import aiosqlite
 import httpx
@@ -42,7 +43,7 @@ import yaml
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import (FileResponse, HTMLResponse, JSONResponse,
-                               Response, StreamingResponse)
+                               PlainTextResponse, Response, StreamingResponse)
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -479,7 +480,9 @@ _VISITOR_TABLE_SQL = (
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
                          "/services", "/who-we-protect", "/how-it-works", "/contact",
-                         "/insights", "/privacy"}
+                         "/insights", "/privacy", "/assessment", "/tools",
+                         "/training/phishing", "/faq", "/disclosure",
+                         "/availability"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -691,6 +694,24 @@ async def _http_exception_handler(request: Request, exc):
     return JSONResponse({"detail": exc.detail}, status_code=exc.status_code,
                         headers=getattr(exc, "headers", None))
 
+
+@app.exception_handler(500)
+async def _server_error_handler(request: Request, exc):
+    # ESTATE-2026-10-25 (polish): the themed-404 pattern extended to
+    # server errors. Same narrow carve-out as the 404 above: only a
+    # browser navigation (GET/HEAD accepting text/html, never /api/*
+    # or /internal/*) gets the themed page; every other caller keeps
+    # the plain JSON shape. The exception itself is logged by the
+    # server layer as before — this handler only shapes the reply.
+    if (request.method in ("GET", "HEAD")
+            and not request.url.path.startswith(("/api", "/internal"))
+            and "text/html" in request.headers.get("accept", "").lower()):
+        return templates.TemplateResponse(
+            request, "500.html", {"request": request, "now": _utcnow()},
+            status_code=500)
+    return JSONResponse({"detail": "Internal Server Error"},
+                        status_code=500)
+
 # in-memory live-data store (SQLite holds the persistent stuff)
 STARTED_AT = None
 store = {
@@ -708,7 +729,9 @@ SCHEMA = """
 CREATE TABLE IF NOT EXISTS contacts(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
-  subject TEXT DEFAULT '', message TEXT NOT NULL, ip TEXT DEFAULT '');
+  subject TEXT DEFAULT '', message TEXT NOT NULL, ip TEXT DEFAULT '',
+  service TEXT DEFAULT '', pref_date TEXT DEFAULT '',
+  pref_window TEXT DEFAULT '');
 CREATE TABLE IF NOT EXISTS tickets(
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   created_at TEXT NOT NULL, name TEXT NOT NULL, email TEXT NOT NULL,
@@ -744,6 +767,18 @@ async def init_db():
     try:
         async with await _db() as db:
             await db.executescript(SCHEMA)
+            # ESTATE-2026-10-25 (contact booking upgrade): the three
+            # booking fields are additive columns on contacts. Fresh
+            # databases get them from SCHEMA above; existing ones get
+            # them here. SQLite has no ADD COLUMN IF NOT EXISTS, so a
+            # duplicate-column error simply means "already migrated".
+            for _col in ("service", "pref_date", "pref_window"):
+                try:
+                    await db.execute(
+                        f"ALTER TABLE contacts ADD COLUMN {_col} "
+                        "TEXT DEFAULT ''")
+                except Exception:
+                    pass
             await db.execute("PRAGMA journal_mode=WAL")  # SL5-1: see _db()
             await db.commit()
     except sqlite3.DatabaseError:
@@ -1158,6 +1193,43 @@ async def contact(request: Request):
     return templates.TemplateResponse(request, "contact.html", _ctx(request))
 
 
+@app.get("/insights/feed.xml")
+async def insights_feed(request: Request):
+    # ESTATE-2026-10-25 (item 7): the Insights RSS feed, built from
+    # the same _load_insights() data the pages render — one source,
+    # so the feed can never drift from the notebook. Registered
+    # BEFORE /insights/{slug} so "feed.xml" is never read as a slug.
+    from email.utils import format_datetime as _fmt_dt
+    posts = _load_insights()
+    items = []
+    for post in posts:
+        day = datetime.strptime(post["date"], "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        items.append(
+            "<item><title>%s</title><link>%s%s</link>"
+            "<guid isPermaLink=\"true\">%s%s</guid>"
+            "<pubDate>%s</pubDate><description>%s</description></item>"
+            % (_xml_escape(post["title"]), _SITE_BASE, post["url"],
+               _SITE_BASE, post["url"], _fmt_dt(day),
+               _xml_escape(post["dek"])))
+    if posts:
+        latest = datetime.strptime(posts[0]["date"], "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        built = "<lastBuildDate>%s</lastBuildDate>" % _fmt_dt(latest)
+    else:
+        built = ""
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<rss version="2.0"><channel>'
+           "<title>Sentinel Safeguard \u2014 Insights</title>"
+           "<link>%s/insights</link>"
+           "<description>Plain-language security notes for Kansas "
+           "City metro businesses and homes, from Sentinel "
+           "Safeguard's daily watch.</description>"
+           "<language>en-us</language>%s%s</channel></rss>"
+           % (_SITE_BASE, built, "".join(items)))
+    return Response(content=xml, media_type="application/rss+xml")
+
+
 @app.get("/insights", response_class=HTMLResponse)
 async def insights(request: Request):
     # Insights (owner order 2026-10-25): the public notebook —
@@ -1193,6 +1265,217 @@ async def privacy(request: Request):
     # absence that the inventory contradicts (it never says "we
     # collect nothing", "no cookies", or "anonymous").
     return templates.TemplateResponse(request, "privacy.html", _ctx(request))
+
+
+@app.get("/assessment", response_class=HTMLResponse)
+async def assessment(request: Request):
+    # ESTATE-2026-10-25 (item 1): the security self-assessment —
+    # ten plain-language questions, scored entirely client-side.
+    # NOTHING is transmitted or stored: there is no POST endpoint
+    # behind this page, and the privacy page needs no new entry
+    # for it (it already states the visitor log covers page views).
+    return templates.TemplateResponse(request, "assessment.html",
+                                      _ctx(request))
+
+
+@app.get("/tools", response_class=HTMLResponse)
+async def tools_page(request: Request):
+    # ESTATE-2026-10-25 (item 2): the passphrase generator + the
+    # transparent strength checker. Both run client-side only —
+    # crypto.getRandomValues on the device, nothing sent anywhere.
+    return templates.TemplateResponse(request, "tools.html",
+                                      _ctx(request))
+
+
+@app.get("/training/phishing", response_class=HTMLResponse)
+async def training_phishing(request: Request):
+    # ESTATE-2026-10-25 (item 3): spot-the-phish training. IA call
+    # (recorded in the lane record): a standalone path under
+    # /training/ rather than a /tools section — training is a
+    # different job from the utilities, the URL reads as a course
+    # address a business can be sent to directly, and /training/
+    # leaves room for future rounds without crowding /tools.
+    # Samples are inert mock UI rendered from text only.
+    return templates.TemplateResponse(request, "training_phishing.html",
+                                      _ctx(request))
+
+
+@app.get("/faq", response_class=HTMLResponse)
+async def faq(request: Request):
+    # ESTATE-2026-10-25 (item 6): only facts already true elsewhere
+    # on the site — appointment-only, authorization-first testing,
+    # KC metro, the /how-it-works flow, and cost framed as what
+    # drives it (scope, size, systems) with no numbers anywhere.
+    return templates.TemplateResponse(request, "faq.html", _ctx(request))
+
+
+@app.get("/disclosure", response_class=HTMLResponse)
+async def disclosure(request: Request):
+    # ESTATE-2026-10-25 (item 4): the responsible-disclosure page —
+    # the human-readable companion to /.well-known/security.txt.
+    return templates.TemplateResponse(request, "disclosure.html",
+                                      _ctx(request))
+
+
+# ------------------------------------------------------- availability
+# ESTATE-2026-10-25 (item 10, built LAST per the sweep order): the
+# public availability page reads the server lane's monitor log
+# (contract B in estate-sweep-sections/server.md — path, JSONL
+# format, and target list are FIXED there; this code consumes, it
+# does not redefine). The path is overridable by environment for
+# staging/tests; production uses the contract path.
+AVAILABILITY_LOG_PATH = Path(
+    os.environ.get("SENTINEL_AVAILABILITY_LOG")
+    or "/var/lib/sentinel-status/availability.jsonl")
+_AVAIL_TARGETS = [
+    ("public_site", "Public website"),
+    ("live_loopback", "Website server"),
+    ("command_gate", "Sentinel Command gate"),
+    ("command_loopback", "Command server"),
+    ("mail_imap_993", "Mail \u2014 receiving"),
+    ("mail_submit_587", "Mail \u2014 sending"),
+    ("mail_smtp_25", "Mail \u2014 delivery"),
+    ("tunnel_public_dns", "Domain name resolution"),
+]
+_AVAIL_WINDOW_MS = 30 * 24 * 3600 * 1000
+_AVAIL_STALE_MS = 15 * 60 * 1000
+
+
+def _avail_fmt_ms(ms):
+    d = datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(
+        _CHICAGO_TZ)
+    return "%s %d, %d" % (d.strftime("%B"), d.day, d.year)
+
+
+def _avail_fmt_ms_time(ms):
+    d = datetime.fromtimestamp(ms / 1000, timezone.utc).astimezone(
+        _CHICAGO_TZ)
+    return "%s %d, %d, %s CT" % (
+        d.strftime("%B"), d.day, d.year,
+        d.strftime("%I:%M %p").lstrip("0"))
+
+
+def _availability_summary():
+    """Compute the availability page's data from the monitor log.
+
+    Honesty rules (coordinator contract): "checking since" is the
+    FIRST entry's date — no backfill; current state is the latest
+    entry per target; uptime is ok/total over the logged window,
+    capped at 30 days; a log whose newest entry is older than the
+    stale threshold is flagged, never silently presented as live.
+    A missing/unreadable/empty log is "not available yet", not an
+    error and never faked numbers."""
+    try:
+        lines = AVAILABILITY_LOG_PATH.read_text(
+            encoding="utf-8").splitlines()
+    except Exception:
+        return {"available": False}
+    entries = []
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            e = json.loads(line)
+            entries.append((int(e["ts"]), str(e["target"]),
+                            bool(e["ok"]), int(e.get("ms") or 0)))
+        except Exception:
+            continue  # a torn final line must never break the page
+    if not entries:
+        return {"available": False}
+    entries.sort(key=lambda x: x[0])
+    first_ts = entries[0][0]
+    last_ts = entries[-1][0]
+    cutoff = last_ts - _AVAIL_WINDOW_MS
+    window = [e for e in entries if e[0] >= cutoff]
+    rows = []
+    for target, label in _AVAIL_TARGETS:
+        mine = [e for e in window if e[1] == target]
+        if not mine:
+            continue
+        latest = mine[-1]
+        ok_count = sum(1 for e in mine if e[2])
+        uptime = 100.0 * ok_count / len(mine)
+        uptime_txt = ("%d" % uptime) if uptime == int(uptime) else (
+            "%.2f" % uptime).rstrip("0").rstrip(".")
+        rows.append({"target": target, "label": label,
+                     "ok": latest[2], "ms": latest[3],
+                     "total": len(mine), "uptime": uptime_txt})
+    if not rows:
+        return {"available": False}
+    import time as _time
+    now_ms = int(_time.time() * 1000)
+    return {"available": True, "rows": rows,
+            "all_ok": all(r["ok"] for r in rows),
+            "since_long": _avail_fmt_ms(first_ts),
+            "last_long": _avail_fmt_ms_time(last_ts),
+            "stale": (now_ms - last_ts) > _AVAIL_STALE_MS}
+
+
+@app.get("/availability", response_class=HTMLResponse)
+async def availability(request: Request):
+    return templates.TemplateResponse(
+        request, "availability.html",
+        _ctx(request, avail=_availability_summary()))
+
+
+# ------------------------------------------------------- insights plumbing
+_SITE_BASE = "https://sentinelsafeguard.net"
+_SITEMAP_PATHS = ["/", "/about", "/services", "/who-we-protect",
+                  "/how-it-works", "/insights", "/privacy",
+                  "/operations", "/threat-map", "/geopolitical",
+                  "/flights", "/contact", "/report-issue",
+                  "/assessment", "/tools", "/training/phishing",
+                  "/faq", "/disclosure", "/availability"]
+
+
+@app.get("/sitemap.xml")
+async def sitemap(request: Request):
+    # ESTATE-2026-10-25 (item 7): every public page + every Insights
+    # post (with its real date as lastmod). Gated surfaces are not
+    # listed — a sitemap names what the public may read.
+    urls = []
+    for path in _SITEMAP_PATHS:
+        urls.append("<url><loc>%s%s</loc></url>" % (_SITE_BASE, path))
+    for post in _load_insights():
+        urls.append("<url><loc>%s%s</loc><lastmod>%s</lastmod></url>"
+                    % (_SITE_BASE, post["url"], post["date"]))
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/'
+           '0.9">%s</urlset>' % "".join(urls))
+    return Response(content=xml, media_type="application/xml")
+
+
+@app.get("/robots.txt")
+async def robots(request: Request):
+    # Points crawlers at the sitemap. NOTE (recorded in the lane
+    # record): the app pages currently carry a noindex meta from an
+    # earlier era while the static homepage does not — resolving
+    # that indexing question is the owner's call, not this sweep's;
+    # this file only makes the public set discoverable and named.
+    return PlainTextResponse(
+        "User-agent: *\nAllow: /\n\nSitemap: %s/sitemap.xml\n"
+        % _SITE_BASE)
+
+
+# ESTATE-2026-10-25 (item 4): RFC 9116 security.txt, served by the
+# app AND committed identically under site/.well-known/ (the static
+# copy covers any deployment shape that serves the tree without the
+# app route; the two are pinned byte-identical by test). Contact is
+# the report page first (the monitored intake) and the sentinel@
+# mailbox second — a real mailbox since the 2026-10-25 mail cutover.
+SECURITY_TXT = (
+    "Contact: https://sentinelsafeguard.net/report-issue\n"
+    "Contact: mailto:sentinel@sentinelsafeguard.net\n"
+    "Expires: 2027-10-25T17:00:00-05:00\n"
+    "Preferred-Languages: en\n"
+    "Canonical: https://sentinelsafeguard.net/.well-known/security.txt\n"
+    "Policy: https://sentinelsafeguard.net/disclosure\n")
+
+
+@app.get("/.well-known/security.txt")
+async def security_txt(request: Request):
+    return PlainTextResponse(SECURITY_TXT)
 
 
 @app.get("/operations", response_class=HTMLResponse)
@@ -1618,6 +1901,16 @@ async def _verify_turnstile(request: Request, body: dict):
                  "by email or phone.")
 
 
+# ESTATE-2026-10-25: the booking-upgrade vocabularies for
+# /api/contact — mirrored by the /contact form's <select> options and
+# pinned by tests/test_estate_sweep_2026_10_25.py. The service list is
+# the five lines of work /services names, plus the honest "not sure".
+CONTACT_SERVICES = ("Penetration testing", "Cybersecurity & IT",
+                    "Security installs", "Incident response",
+                    "Custom websites & software", "Not sure yet")
+CONTACT_TIME_WINDOWS = ("Morning", "Afternoon", "Evening")
+
+
 @app.post("/api/contact")
 async def api_contact(request: Request):
     rate_limit(request)
@@ -1629,11 +1922,32 @@ async def api_contact(request: Request):
         raise HTTPException(400, "Name, a valid email, and a message are required.")
     if len(message) > 5000:
         raise HTTPException(400, "Message is too long (5000 chars max).")
+    # ESTATE-2026-10-25 (booking upgrade): three OPTIONAL fields —
+    # the service the message is about, a preferred date, and a
+    # preferred time window. All validated server-side against the
+    # exact sets the form offers; anything outside them is a plain
+    # 400, and an absent field stores "" exactly as before, so the
+    # homepage form's original payload keeps working unchanged.
+    service = _s(body, "service").strip()
+    if service and service not in CONTACT_SERVICES:
+        raise HTTPException(400, "Please pick a service from the list.")
+    pref_date = _s(body, "pref_date").strip()
+    if pref_date:
+        try:
+            datetime.strptime(pref_date, "%Y-%m-%d")
+        except ValueError:
+            raise HTTPException(400, "Preferred date must be a date.")
+        if len(pref_date) != 10:
+            raise HTTPException(400, "Preferred date must be a date.")
+    pref_window = _s(body, "pref_window").strip()
+    if pref_window and pref_window not in CONTACT_TIME_WINDOWS:
+        raise HTTPException(400, "Please pick a time window from the list.")
     async with await _db() as db:
         await db.execute(
-            "INSERT INTO contacts(created_at,name,email,subject,message,ip) VALUES(?,?,?,?,?,?)",
+            "INSERT INTO contacts(created_at,name,email,subject,message,ip,"
+            "service,pref_date,pref_window) VALUES(?,?,?,?,?,?,?,?,?)",
             (_utcnow(), name[:120], email[:160], _s(body, "subject")[:160],
-             message, _client_ip(request)))
+             message, _client_ip(request), service, pref_date, pref_window))
         await db.commit()
     log.info("contact submission from %s", email)
     return {"ok": True}
