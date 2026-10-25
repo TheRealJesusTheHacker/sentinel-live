@@ -5,16 +5,16 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 {% endblock %}
 {% block content %}
-<section class="pagehead">
+<section class="pagehead rv">
   <h1>Live <span class="grn">Threat Map</span></h1>
   <p class="sub">Live attacks observed by the SANS Internet Storm Center (DShield) global sensor network.
   Arcs trace attack traffic from origin countries toward the sensor network. Optional ThreatFox malware-family
   enrichment appears below when an abuse.ch key is configured.</p>
   <p id="upd" class="dim">Loading&hellip;</p>
 </section>
-<section class="counters" id="counters"></section>
-<div id="map" class="map"></div>
-<div class="maplegend">
+<section class="counters rv" id="counters"></section>
+<div id="map" class="map rvf"></div>
+<div class="maplegend rv">
   <b>Legend</b>
   <span><i class="dot" style="background:#ff4444"></i>Country volume &gt; 50k attacks/day</span>
   <span><i class="dot" style="background:#ff7b33"></i>&gt; 10k</span>
@@ -25,7 +25,7 @@
 </div>
 <p class="dim">Circles are sized and colored by attack volume per source country (top-40 mapped attackers).
 Zoom in — the Streets basemap shows borders, regions, cities and roads; switch to Satellite or Dark in the layer control (top right).</p>
-<section class="two-col">
+<section class="two-col rv">
   <div>
     <h2>Top attacking countries</h2>
     <ul id="ctrs" class="bars"></ul>
@@ -35,11 +35,11 @@ Zoom in — the Streets basemap shows borders, regions, cities and roads; switch
     <ul id="types" class="bars"></ul>
   </div>
 </section>
-<section id="famsec" style="display:none">
+<section id="famsec" class="rv" style="display:none">
   <h2>Top malware families <span class="dim">(ThreatFox enrichment)</span></h2>
   <ul id="fams" class="bars"></ul>
 </section>
-<section>
+<section class="rv">
   <h2>Live attacker ticker</h2>
   <div id="ticker" class="ticker"><p class="dim">Loading&hellip;</p></div>
 </section>
@@ -80,6 +80,7 @@ const map = L.map('map', {worldCopyJump: true}).setView([28, 8], 2);
 
 const pulseIcon = L.divIcon({className: 'pulse', iconSize: [14, 14]});
 let layers = [];
+let cuFirst = true;
 
 // Aggregate the per-IP markers into one volume point per source country:
 // centroid of that country's mapped IPs, summed attacks, top attack types.
@@ -114,10 +115,19 @@ async function load() {
       'Last updated ' + (d.updated || 'never') +
       (d.status === 'ok' ? '' : ' — ' + (d.error || d.status) + ' — retrying automatically.');
     document.getElementById('counters').innerHTML =
-      '<div class="counter"><b>' + fmt(d.attacks_today) + '</b><span>attacks logged today</span></div>' +
-      '<div class="counter"><b>' + fmt(d.sources_today) + '</b><span>attacking sources today</span></div>' +
-      '<div class="counter"><b>' + d.markers.length + '</b><span>top attackers mapped</span></div>' +
-      '<div class="counter"><b>' + d.arcs.length + '</b><span>attack paths</span></div>';
+      '<div class="counter"><b data-cu="' + (d.attacks_today || 0) + '">0</b><span>attacks logged today</span></div>' +
+      '<div class="counter"><b data-cu="' + (d.sources_today || 0) + '">0</b><span>attacking sources today</span></div>' +
+      '<div class="counter"><b data-cu="' + d.markers.length + '">0</b><span>top attackers mapped</span></div>' +
+      '<div class="counter"><b data-cu="' + d.arcs.length + '">0</b><span>attack paths</span></div>';
+    // Design pass: on first load the counters count up to their live
+    // values (SSG.countUp sets them instantly under reduced motion);
+    // on the 60s refreshes they update in place — a live instrument,
+    // not a looping animation.
+    document.querySelectorAll('#counters [data-cu]').forEach(function (el) {
+      var v = Number(el.getAttribute('data-cu'));
+      if (window.SSG && cuFirst) SSG.countUp(el, v, fmt); else el.textContent = fmt(v);
+    });
+    cuFirst = false;
     layers.forEach(l => map.removeLayer(l)); layers = [];
     countryPoints(d).forEach(g => {
       const vol = g.total != null ? g.total : g.attacks;

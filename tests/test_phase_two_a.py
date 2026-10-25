@@ -105,7 +105,10 @@ def test_header_marks_current_page_and_keeps_library(app_mod, path):
 
 def test_stylesheet_version_query_bumped(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-1" in resp.text
+    # 20261025-1 was Phase Two A's bump; the design pass changed
+    # style.css again the same day and moved the query to -2 (the
+    # standing rule: the version query follows EVERY CSS change).
+    assert "/static/style.css?v=20261025-2" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

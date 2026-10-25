@@ -469,7 +469,7 @@ _VISITOR_TABLE_SQL = (
     " referrer TEXT NOT NULL DEFAULT '', country TEXT NOT NULL DEFAULT '',"
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
-                         "/flights", "/report-issue", "/ticket"}
+                         "/flights", "/report-issue", "/ticket", "/about"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -930,6 +930,16 @@ async def index(request: Request):
     if home.is_file():
         return FileResponse(home, media_type="text/html")
     return _operations_page(request)
+
+
+@app.get("/about", response_class=HTMLResponse)
+async def about(request: Request):
+    # About the Company (owner order 2026-10-25): a static-content
+    # page in the shared chrome — who the company is, who leads it,
+    # what it does, and the proof that is already public. Content is
+    # factual-only by the owner's accuracy rules (no client history,
+    # no testimonials, future services marked planned).
+    return templates.TemplateResponse(request, "about.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)

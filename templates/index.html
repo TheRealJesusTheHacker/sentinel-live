@@ -1,33 +1,33 @@
 {% extends "base.html" %}
 {% block title %}Live Operations{% endblock %}
 {% block content %}
-<section class="hero">
+<section class="hero rv">
   <h1>Sentinel <span class="grn">Safeguard</span></h1>
   <p class="sub">Real-time threat intelligence, geopolitical monitoring, flight tracking, and daily briefings &mdash; from Sentinel Safeguard LLC.</p>
 </section>
 <section class="cards">
-  <a class="card" href="/threat-map">
+  <a class="card rv" href="/threat-map">
     <h3>Live Threat Map</h3>
     <p>Malicious infrastructure observed in the wild, mapped live.</p>
     <span class="stat">{{ '{:,}'.format(threat.attacks_today or 0) }} attacks today &middot; {{ threat.status }}</span>
   </a>
-  <a class="card" href="/geopolitical">
+  <a class="card rv" style="--d:.06s" href="/geopolitical">
     <h3>Geopolitical Feed</h3>
     <p>World events with hotspot mapping and impact notes.</p>
     <span class="stat">{{ geo["items"]|length if geo else 0 }} stories &middot; {{ geo.status if geo else "" }}</span>
   </a>
-  <a class="card" href="/flights">
+  <a class="card rv" style="--d:.12s" href="/flights">
     <h3>Flight Tracker</h3>
     <p>Live flight status by flight number.</p>
     <span class="stat">Search any commercial flight</span>
   </a>
-  <a class="card" href="/news">
+  <a class="card rv" style="--d:.18s" href="/news">
     <h3>News Hub</h3>
     <p>Daily briefing: national, Missouri, KC, cyber, markets.</p>
     <span class="stat">{{ news.status if news else "" }}</span>
   </a>
 </section>
-<section class="live-previews" aria-label="Live data previews">
+<section class="live-previews rv" aria-label="Live data previews">
   <div class="preview-head">
     <h2>Live right now</h2>
     <p class="dim">Live samples from the public trackers &mdash; refreshed automatically every minute. Open a tracker for the full picture.</p>

@@ -5,7 +5,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 {% endblock %}
 {% block content %}
-<section class="pagehead">
+<section class="pagehead rv">
   <h1>Flight <span class="grn">Tracker</span></h1>
   <p class="sub">Live commercial flight status by flight number.</p>
 </section>
@@ -15,7 +15,7 @@
   <p>Live flight data is temporarily unavailable. Please check back soon.</p>
 </section>
 {% endif %}
-<form class="searchbar" method="get" action="/flights">
+<form class="searchbar rv" method="get" action="/flights">
   <input name="q" value="{{ q|e }}" placeholder="Flight number — e.g. AA100, UAL512, SWA204" autocomplete="off">
   <button type="submit">Track</button>
 </form>
@@ -23,7 +23,7 @@
 <section class="notice"><p>{{ error }}</p></section>
 {% endif %}
 {% if result %}
-<section class="flight">
+<section class="flight rv">
   <h2>{{ result.number }} <span class="dim">{{ result.airline }}</span></h2>
   <p class="status-pill">{{ result.status.replace('_', ' ') }}</p>
   <div class="route">
@@ -46,14 +46,14 @@
   {% if result.aircraft %}<p class="dim">Aircraft reg: {{ result.aircraft }}</p>{% endif %}
 </section>
 {% endif %}
-<section>
+<section class="rv">
   <div class="maplegend maplegend-top">
     <b>Legend</b>
     <span><i class="dash grn"></i>great-circle route</span>
     <span>&#9992; live aircraft position (when the provider reports it)</span>
   </div>
   <p class="dim" id="fmap-note">World view — search a flight number above and its route is plotted here.</p>
-  <div id="fmap" class="map"></div>
+  <div id="fmap" class="map rvf"></div>
 </section>
 {% endblock %}
 {% block scripts %}

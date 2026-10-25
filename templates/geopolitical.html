@@ -5,20 +5,20 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="anonymous"></script>
 {% endblock %}
 {% block content %}
-<section class="pagehead">
+<section class="pagehead rv">
   <h1>Geopolitical <span class="grn">Feed</span></h1>
   <p class="sub">Live world-event headlines with hotspot mapping and an automated impact note per story.</p>
   <p id="upd" class="dim">Loading&hellip;</p>
 </section>
-<div id="map" class="map"></div>
-<div class="maplegend">
+<div id="map" class="map rvf"></div>
+<div class="maplegend rv">
   <b>Legend</b>
   <span><i class="dot" style="background:#ffb300;border:2px solid #ffe082"></i>story hotspot — number = stories placed there</span>
 </div>
 <p class="dim">Hotspots are placed by matching place names in headlines against a world gazetteer — positions are
 approximate (country/region level). Stories that match no known place stay in the feed below. Zoom in — the
 Streets basemap shows borders, regions, cities and roads; switch to Satellite or Dark in the layer control (top right).</p>
-<section>
+<section class="rv">
   <h2>Latest stories</h2>
   <div id="stories"><p class="dim">Loading&hellip;</p></div>
 </section>
