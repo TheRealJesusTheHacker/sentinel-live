@@ -220,7 +220,14 @@ def test_flights_page_has_live_layer(app_mod):
     for marker in ('id="live-status"', 'id="flight-panel"', 'id="fp-close"',
                    "/api/live-flights", "adsb.lol", "Not for navigation",
                    "below 10,000 ft", "above 30,000 ft", "emergency squawk",
-                   "setView(KC, 9)", "POLL_MS = 15000"):
+                   "setView(KC, 9)", "POLL_MS = 15000",
+                   # world-copy discipline (the map runs worldCopyJump):
+                   # incoming positions normalize to the copy nearest the
+                   # view, and the panel prints true -180..180 values.
+                   "World-copy discipline", "((a.lon + 540) % 360) - 180",
+                   # dead reckoning converts BOTH axes back to degrees
+                   # (a radians longitude wraps ~57x around the world).
+                   "return [nLa / rad, nLo / rad]"):
         assert marker in resp.text, marker
 
 

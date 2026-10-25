@@ -236,9 +236,12 @@ function aptPopup(title, apt, code, when) {
       return [e.lat, e.lon];
     }
     const dNm = e.data.speed_kt * dt / 3600, rad = Math.PI / 180;
-    const brg = e.data.heading * rad, la = e.lat * rad;
+    const brg = e.data.heading * rad, la = e.lat * rad, lo = e.lon * rad;
     const nLa = la + (dNm / 3440.065) * Math.cos(brg);
-    const nLo = e.lon + (dNm / 3440.065) * Math.sin(brg) / Math.max(0.2, Math.cos(la));
+    const nLo = lo + (dNm / 3440.065) * Math.sin(brg) / Math.max(0.2, Math.cos(la));
+    // nLa/nLo are RADIANS here — convert BOTH back to degrees.
+    // (A radians longitude fed to the marker wrapped ~57x around
+    // the world: positions landed thousands of degrees west.)
     return [nLa / rad, nLo / rad];
   }
   function setRot(e, hdg) {
@@ -271,6 +274,10 @@ function aptPopup(title, apt, code, when) {
   }
 
   function renderPanel(a) {
+    // Display coordinates are always the true -180..180 values, even
+    // when the marker rides a wrapped world copy.
+    const dLat = Math.max(-90, Math.min(90, a.lat));
+    const dLon = ((a.lon + 540) % 360) - 180;
     document.getElementById('fp-title').textContent = a.callsign || a.registration || (a.hex || '').toUpperCase() || 'Aircraft';
     const sub = [];
     if (a.type) sub.push('Type ' + a.type);
@@ -285,7 +292,7 @@ function aptPopup(title, apt, code, when) {
       : (a.vertical_rate_fpm === 0 ? 'Level' : (a.vertical_rate_fpm > 0 ? '+' : '-') + fmtInt(Math.abs(a.vertical_rate_fpm)) + ' fpm');
     document.getElementById('fp-sqk').innerHTML = a.squawk
       ? esc(a.squawk) + (a.emergency ? ' <span class="fp-emg">EMERGENCY</span>' : '') : '—';
-    document.getElementById('fp-pos').textContent = a.lat.toFixed(4) + ', ' + a.lon.toFixed(4);
+    document.getElementById('fp-pos').textContent = dLat.toFixed(4) + ', ' + dLon.toFixed(4);
     document.getElementById('fp-cat').textContent = a.category || '—';
     panel.hidden = false;
     statusRender();
@@ -306,7 +313,14 @@ function aptPopup(title, apt, code, when) {
     renderPanel(e.data);
   }
   document.getElementById('fp-close').addEventListener('click', deselect);
-  fmap.on('click', deselect);
+  // Clicking empty map clears the selection — but only on a true
+  // background click: a drag-pan that starts on an aircraft also
+  // fires the map's click (the press began on the marker), and that
+  // must not deselect what the visitor is following. 250ms separates
+  // a click from a drag's release.
+  let pressAt = 0;
+  fmap.on('mousedown', () => { pressAt = Date.now(); });
+  fmap.on('click', () => { if (Date.now() - pressAt < 250) deselect(); });
 
   function applyData(data) {
     if (!data || !Array.isArray(data.aircraft)) { meta.ok = false; statusRender(); return; }
@@ -323,8 +337,20 @@ function aptPopup(title, apt, code, when) {
     list.forEach(a => {
       const key = a.hex || (a.callsign || '') + '@' + a.lat + ',' + a.lon;
       seen.add(key);
+      // World-copy discipline: the map runs with worldCopyJump, so a
+      // marker's stored longitude can drift a full world (360°) from
+      // the feed's — comparing raw longitudes then reads as a
+      // trans-world jump, and any position derived from the drifted
+      // copy (the panel's readout) would print impossible coordinates.
+      // Normalize every incoming position to the copy nearest the
+      // current view center; stored entries keep their own copy.
+      const clng = c.lng;
+      while (a.lon - clng > 180) a.lon -= 360;
+      while (clng - a.lon > 180) a.lon += 360;
       const e = entries.get(key);
       if (e) {
+        while (a.lon - e.lon > 180) a.lon -= 360;
+        while (e.lon - a.lon > 180) a.lon += 360;
         const p = posAt(e, now);
         e.lat = a.lat; e.lon = a.lon; e.t0 = now; e.data = a;
         e.marker.setLatLng(p);
