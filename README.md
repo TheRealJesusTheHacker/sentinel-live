@@ -1,6 +1,6 @@
 # Sentinel Live Server
 
-[![Release](https://img.shields.io/badge/release-v1.0.3-blue?style=flat-square)](https://github.com/TheRealJesusTheHacker/sentinel-live/releases/tag/v1.0.3)
+[![Release](https://img.shields.io/badge/release-v1.0.4-blue?style=flat-square)](https://github.com/TheRealJesusTheHacker/sentinel-live/releases/tag/v1.0.4)
 [![Build Windows EXE](https://github.com/TheRealJesusTheHacker/sentinel-live/actions/workflows/build-exe.yml/badge.svg?style=flat-square)](https://github.com/TheRealJesusTheHacker/sentinel-live/actions/workflows/build-exe.yml)
 [![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?style=flat-square)](requirements.txt)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.143.0-009688?style=flat-square)](requirements.txt)
@@ -221,11 +221,11 @@ How it works, in the order a request and a refresh travel:
 
 ### From a release (the normal path)
 
-Current release: **v1.0.3**, providing `SentinelLive.exe` and
+Current release: **v1.0.4**, providing `SentinelLive.exe` and
 `SHA256SUMS.txt`.
 
 1. **Download** `SentinelLive.exe` (and `SHA256SUMS.txt`, to verify it) from
-   the [v1.0.3 release](https://github.com/TheRealJesusTheHacker/sentinel-live/releases/tag/v1.0.3)
+   the [v1.0.4 release](https://github.com/TheRealJesusTheHacker/sentinel-live/releases/tag/v1.0.4)
    and put the exe in an administrator-protected folder, e.g.
    `C:\SentinelLive\`. Copy `install.ps1` / `uninstall.ps1` from this
    repository next to it. Do not use a folder inside a user profile — see
@@ -503,16 +503,19 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is nine files — `tests/test_hackproof_proxy.py` (22 tests),
+The suite is ten files — `tests/test_hackproof_proxy.py` (22 tests),
 `tests/test_turnstile.py` (7 tests), `tests/test_front_door.py`
-(4 tests), `tests/test_bughunt_2026_10_23.py`,
-`tests/test_visitors_2026_10_23.py` (public visitor logging),
-`tests/test_sweep5_2026_10_24.py`, `tests/test_phase_two_a.py`
-(the Phase Two pins), `tests/test_design_pass.py` (the design-pass,
-About, Services, Who We Protect, How It Works, and Contact pins), and
-`tests/test_live_flights.py` — with
-**138 tests** in total, verified by a full run on 2026-10-25
-(`138 passed`).
+(4 tests), `tests/test_bughunt_2026_10_23.py` (17 tests),
+`tests/test_visitors_2026_10_23.py` (10 tests; public visitor logging),
+`tests/test_sweep5_2026_10_24.py` (8 tests), `tests/test_phase_two_a.py`
+(21 tests; the Phase Two pins), `tests/test_design_pass.py` (54 tests;
+the design-pass, About, Services, Who We Protect, How It Works, and
+Contact pins), `tests/test_live_flights.py` (10 tests), and
+`tests/test_nav_consistency.py` (24 tests) — with
+**177 tests** in total, verified by a full run on 2026-10-25
+(`177 passed`). One visitor-log test is timing-sensitive under heavy
+parallel load (a row-order assertion); it passes standalone and in a
+clean full run.
 It builds the app against fake payments upstreams and covers, among other
 things:
 
@@ -563,7 +566,7 @@ throttling).
   (Threat Map, Geopolitics, Flights) read this app's public data
   APIs — Command remains a separate gated service, and this app
   still does not serve it.
-- **Current release: v1.0.3** (GitHub Releases), providing
+- **Current release: v1.0.4** (GitHub Releases), providing
   `SentinelLive.exe` and `SHA256SUMS.txt`. Publishing a GitHub release
   triggers the build workflow (`.github/workflows/build-exe.yml`), which
   builds the exe with PyInstaller and attaches it to that release.
