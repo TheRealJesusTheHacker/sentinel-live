@@ -470,7 +470,7 @@ _VISITOR_TABLE_SQL = (
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
-                         "/services"}
+                         "/services", "/who-we-protect"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -953,6 +953,19 @@ async def services(request: Request):
     # the custom websites & software section is the owner's
     # developer tribute, every claim linked to its public proof.
     return templates.TemplateResponse(request, "services.html", _ctx(request))
+
+
+@app.get("/who-we-protect", response_class=HTMLResponse)
+async def who_we_protect(request: Request):
+    # Who We Protect (owner order 2026-10-25): the named industries
+    # are a focus, never a fence — the page is an INVITATION, framed
+    # "built for / common calls", never a client résumé (no client
+    # base is implied in any vertical; the first booking is still
+    # ahead). Residential and the open-door block are the owner's
+    # explicit additions: businesses AND homes, and anyone whose
+    # world is not named still reads "this means you". Same
+    # factual-only discipline as /about and /services.
+    return templates.TemplateResponse(request, "who_we_protect.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)

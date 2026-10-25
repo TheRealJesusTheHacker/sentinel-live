@@ -94,6 +94,7 @@ a public port.
 | `/operations` | Live operations page — the threat, geopolitical, and news panels, plus "Live right now" previews of the three trackers |
 | `/about` | About the Company — who the company is, who leads it, what it does, and the proof that is already public |
 | `/services` | Services — the five lines of work in full (penetration testing, cybersecurity & IT, security installs, incident response & forensics, custom websites & software), each with who it is for and what the client walks away with |
+| `/who-we-protect` | Who We Protect — who the work is built for: apartment complexes & property management, senior centers & care facilities, churches & nonprofits, local service companies & trades, and residential homes & families — framed as a focus, never a fence, with an open door to every other industry |
 | `/report-issue` | Public Report an Issue page — no-login ticket intake form (`/ticket` serves the identical page) |
 | `/threat-map` | Live cyber threat map — attacks observed by the SANS DShield sensor network, refreshed every 5 min by default (keyless). Optional free abuse.ch key adds ThreatFox malware-family enrichment |
 | `/geopolitical` | Geopolitical news feed + hotspot map with per-story impact notes (refreshed every 15 min by default) |
@@ -114,7 +115,7 @@ server.
 Public means public, and the rest is gated — this split is the owner's
 standing order for any public deployment of this code:
 
-- **Public:** `/`, `/operations`, `/about`, `/services`, `/report-issue`,
+- **Public:** `/`, `/operations`, `/about`, `/services`, `/who-we-protect`, `/report-issue`,
   `/ticket`, `/flights`, `/geopolitical`, `/threat-map` and their read
   APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
   endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),
@@ -461,9 +462,10 @@ The suite is nine files — `tests/test_hackproof_proxy.py` (22 tests),
 `tests/test_visitors_2026_10_23.py` (public visitor logging),
 `tests/test_sweep5_2026_10_24.py`, `tests/test_phase_two_a.py`
 (the Phase Two pins), `tests/test_design_pass.py` (the design-pass,
-About, and Services pins), and `tests/test_live_flights.py` — with
-**121 tests** in total, verified by a full run on 2026-10-25
-(`121 passed`).
+About, Services, and Who We Protect pins), and
+`tests/test_live_flights.py` — with
+**127 tests** in total, verified by a full run on 2026-10-25
+(`127 passed`).
 It builds the app against fake payments upstreams and covers, among other
 things:
 

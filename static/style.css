@@ -93,14 +93,27 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 1100px) and (min-width: 861px) {
+@media (max-width: 1560px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
-     tightens a touch more so the single row survives to 861px. */
+     tightens a touch more so the single row survives to 861px.
+     WWP (2026-10-25): Who We Protect made the nav ten destinations
+     plus the Contact pill. Measured in the browser census with the
+     site's real webfonts relayed in, the ten-destination row needs
+     ~1496px at desktop metrics (the nine-destination row ~1425px)
+     and ~1304px even at this band's original .45em link padding —
+     and the same census showed the nine-destination row already
+     overshot mid-band widths: the band's fit guarantee had quietly
+     lapsed when the design-pass font system landed. The band now
+     reaches 1560px, its link padding tightens to .38em, and the
+     row scrolls internally (scrollbar hidden, the mobile header's
+     own pattern) so the page itself can never overflow at band
+     widths, at any window size, on any page. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }
-  .mainnav { gap: .1em; }
-  .mainnav a { padding: .35em .45em; }
+  .mainnav { gap: .1em; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+  .mainnav::-webkit-scrollbar { display: none; }
+  .mainnav a { padding: .35em .38em; }
   .mainnav a.nav-cta { margin-left: .35em; padding: .35em .9em; }
 }
 @media (max-width: 860px) {
@@ -422,6 +435,12 @@ html.js .rv.in, html.js .rvf.in { opacity: 1; transform: none; }
 .svc-what { max-width: 68ch; }
 .svc-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 0 2em; max-width: 68ch; }
 @media (max-width: 700px) { .svc-cols { grid-template-columns: 1fr; } }
+/* WWP census pin (2026-10-25): the header tightening band above is
+   load-bearing for the ten-destination nav (Who We Protect) — its
+   1560px reach, .38em link padding, and the row's internal scroll
+   are what keep every page overflow-free at band widths in the
+   real-font census. test_who_we_protect_tightening_band_covers_the_row
+   in tests/test_design_pass.py pins the values. */
 .svc-cols h3 { margin: .8em 0 .35em; font-size: 1.02em; }
 .svc-note {
   background: var(--surf); border: 1px solid var(--grn-dim); border-radius: var(--r-m);

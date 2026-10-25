@@ -132,7 +132,7 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
 
 @pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
                                   "/geopolitical", "/flights", "/about",
-                                  "/services"])
+                                  "/services", "/who-we-protect"])
 def test_public_pages_never_name_liberty(app_mod, path):
     # Privacy rule (owner, 2026-10-25): the owner's home city never
     # appears in public copy — the service area is stated as Kansas
@@ -166,7 +166,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-4" in resp.text
+    assert "/static/style.css?v=20261025-5" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -282,6 +282,110 @@ def test_about_cards_crosslink_to_services_anchors(app_mod):
         "Built by a developer",
     ):
         assert anchor in body, anchor
+
+
+# --------------------------------------------------- who we protect
+def test_who_we_protect_page_renders_focus_blocks(app_mod):
+    resp = _client(app_mod).get("/who-we-protect")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    for fact in (
+        'id="apartments-property"',
+        'id="senior-centers"',
+        'id="churches-nonprofits"',
+        'id="local-services"',
+        'id="residential"',
+        'id="open-door"',
+        "businesses and homes",
+        "not a whitelist",
+        "Kansas City metro",
+        "By appointment only",
+        "816-533-8418",
+        "Sentinelsafeguard@outlook.com",
+    ):
+        assert fact in body, fact
+    # each focus block states what Sentinel looks at first
+    assert body.count("What Sentinel looks at first") == 5
+    # blocks link into the matching services anchors
+    assert 'href="/services#security-installs"' in body
+    assert 'href="/services#cybersecurity-it"' in body
+
+
+def test_who_we_protect_residential_and_open_door_present(app_mod):
+    # Owner's explicit order (2026-10-25): residential clients and
+    # other industries are accepted — the named industries are a
+    # focus, never a fence. These two blocks are the proof.
+    body = _flat(_client(app_mod).get("/who-we-protect").text)
+    for phrase in (
+        "Residential — homes &amp; families",
+        "A home is a network now",
+        "home Wi-Fi",
+        "scam-proofing",
+        "Don't see your world here?",
+        "it was never a fence",
+        "solo operators",
+        'href="/#contact"',
+    ):
+        assert phrase in body, phrase
+
+
+def test_who_we_protect_is_invitation_not_resume(app_mod):
+    # The page is an invitation ("built for / common calls"), never
+    # a résumé — nothing may imply an existing client base in any
+    # vertical (baseline: the first booking is still ahead).
+    body = _client(app_mod).get("/who-we-protect").text.lower()
+    for banned in (
+        "cyberdogs",
+        "offleash",
+        "backflow",
+        "trusted by",
+        "testimonial",
+        "our experts",
+        "our team of",
+        "our clients",
+        "clients include",
+        "satisfied clients",
+        "businesses served",
+        "we currently protect",
+        "private security guard",
+        "private investigation",
+        "starting at",
+        "$",
+    ):
+        assert banned not in body, banned
+
+
+def test_who_we_protect_tightening_band_covers_the_row():
+    # Who We Protect made the shared nav ten destinations plus the
+    # Contact pill. Measured in the real-font browser census
+    # (2026-10-25): the full row needs ~1496px at desktop metrics
+    # (the nine-destination row ~1425px) and ~1304px even at the
+    # header band's original .45em link padding; the same census
+    # showed the band's old fit guarantee had lapsed for the
+    # nine-destination row too once the design-pass fonts landed.
+    # The band therefore reaches 1560px, tightens link padding to
+    # .38em, and lets the row scroll internally (scrollbar hidden,
+    # the mobile header's pattern) so no page overflows at band
+    # widths. Pin the values so the next nav addition re-opens the
+    # question in the suite instead of silently overflowing screens.
+    css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
+    assert "@media (max-width: 1560px) and (min-width: 861px)" in css
+    assert ".mainnav a { padding: .35em .38em; }" in css
+    band = css.split("@media (max-width: 1560px)")[1].split("@media")[0]
+    assert "overflow-x: auto" in band
+
+
+def test_who_we_protect_nav_active_and_header_link_everywhere(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/who-we-protect")
+    assert 'href="/who-we-protect" class="active"' in resp.text
+    assert "/who-we-protect" in app_mod._VISITOR_PUBLIC_PATHS
+    for path in ("/about", "/services", "/operations", "/threat-map",
+                 "/geopolitical", "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        # nav link + footer link on every shared-chrome page
+        assert page.text.count('href="/who-we-protect"') >= 2, path
 
 
 def test_threat_counters_are_countup_targets(app_mod):
