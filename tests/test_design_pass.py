@@ -75,7 +75,7 @@ def test_about_page_renders_with_verified_facts(app_mod):
         "President &amp; Lead Director of Operations",
         "organized in January 2024",
         "Kansas City, Missouri",
-        "including Liberty",
+        "Kansas City metro area",
         "by appointment only",
         "816-533-8418",
         "Sentinelsafeguard@outlook.com",
@@ -122,7 +122,28 @@ def test_about_future_services_marked_planned_only(app_mod):
 def test_about_security_plus_stated_in_progress_only(app_mod):
     body = _flat(_client(app_mod).get("/about").text)
     assert "currently completing CompTIA Security+" in body
-    assert "December 2026" in body
+    # Privacy rule (owner, 2026-10-25): his exam timing is personal
+    # schedule, never public copy — the credential may appear only as
+    # a dateless in-progress mention, with no target date anywhere.
+    assert "December 2026" not in body
+    assert "Dec 2026" not in body
+    assert "exam targeted" not in body
+
+
+@pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
+                                  "/geopolitical", "/flights", "/about"])
+def test_public_pages_never_name_liberty(app_mod, path):
+    # Privacy rule (owner, 2026-10-25): the owner's home city never
+    # appears in public copy — the service area is stated as Kansas
+    # City / the KC metro only. (The one legitimate code-side use of
+    # the word would be an identifier, not copy; pages carry none.)
+    # The static pair (/report-issue, /ticket) is served from the
+    # site/ tree this suite's scratch app doesn't fixture; those
+    # bytes were swept clean and are re-grepped externally after
+    # every deploy (see LIVE-FLIGHTS-2026-10-25, Privacy Scrub).
+    resp = _client(app_mod).get(path)
+    assert resp.status_code == 200
+    assert "liberty" not in resp.text.lower()
 
 
 def test_about_nav_active_and_header_link_everywhere(app_mod):
