@@ -8,9 +8,9 @@
 [![License](https://img.shields.io/badge/license-Proprietary-red?style=flat-square)](LICENSE)
 
 The server side of the Sentinel Safeguard website: a FastAPI application that
-serves live threat, geopolitical, flight, and news pages, plus the contact,
-ticket, and newsletter APIs behind the public site — packaged as a single
-Windows executable (`SentinelLive.exe`).
+serves the public website's front door, live threat, geopolitical, flight,
+and news pages, plus the contact, ticket, and newsletter APIs behind the
+public site — packaged as a single Windows executable (`SentinelLive.exe`).
 
 It is built to run silently on an always-on host: as a packaged Windows
 install it is one `.exe`, no Python install, no console window, started
@@ -24,7 +24,11 @@ Sentinel Live does three jobs in one process:
 
 1. **Live pages.** Four server-rendered pages present data that refreshes in
    the background on timers: a cyber threat map, a geopolitical feed with a
-   hotspot map, a flight lookup, and a news hub with a daily briefing.
+   hotspot map, a flight lookup, and a news hub with a daily briefing. The
+   public front door and the `/operations` page carry live-preview sections
+   fed by the same data — the homepage's "Live intel, always on." cards and
+   the operations page's "Live right now" panels refresh on a timer and
+   click through to the full pages.
 2. **Website backend.** The public website is a static frontend; its forms
    `fetch()` this server's JSON APIs. Contact messages, Get Help tickets, and
    newsletter signups are validated, rate-limited, and stored in an embedded
@@ -57,6 +61,14 @@ a public port.
   30 minutes by default, plus a daily briefing shown at the top of the page.
 - **Flight lookup** by flight number through AviationStack, when the owner
   has put an AviationStack API key in `config.yaml`.
+- **Live previews on the front door:** the homepage and `/operations` show
+  always-on preview cards for the threat, geopolitical, and flight data,
+  fed by the public read APIs below and auto-refreshing, with click-through
+  to the full tracker pages. The flight preview reuses the tracker's own
+  cached search, so it spends no additional provider quota.
+- **Report an Issue page:** a public, no-login ticket form (`/report-issue`,
+  also linked as `/ticket`) whose submissions land in the same ticket store
+  as the ticket API.
 - **Form intake with no accounts:** contact messages, Get Help tickets (the
   API returns the new `ticket_id`), and newsletter signups (duplicate emails
   still return success, so the endpoint does not reveal who is subscribed).
@@ -78,7 +90,9 @@ a public port.
 
 | Path | What it is |
 |---|---|
-| `/` | Server-rendered home page drawing on the live threat, geopolitical, and news data |
+| `/` | The public front door. With the static `site/` folder present (the production deployment) this is the Sentinel Safeguard homepage, including the "Live intel, always on." preview section |
+| `/operations` | Live operations page — the threat, geopolitical, and news panels, plus "Live right now" previews of the three trackers |
+| `/report-issue` | Public Report an Issue page — no-login ticket intake form (`/ticket` serves the identical page) |
 | `/threat-map` | Live cyber threat map — attacks observed by the SANS DShield sensor network, refreshed every 5 min by default (keyless). Optional free abuse.ch key adds ThreatFox malware-family enrichment |
 | `/geopolitical` | Geopolitical news feed + hotspot map with per-story impact notes (refreshed every 15 min by default) |
 | `/flights` | Flight tracker — search any flight number (needs an AviationStack API key in `config.yaml`) |
@@ -98,15 +112,20 @@ server.
 Public means public, and the rest is gated — this split is the owner's
 standing order for any public deployment of this code:
 
-- **Public:** `/flights`, `/geopolitical`, `/threat-map` and their read
-  APIs (`/api/threat-data`, `/api/geo-data`), plus the public form
-  endpoints (`POST /api/contact`, `/api/ticket`, `/api/newsletter`),
-  which are rate-limited and Turnstile-gated as described above.
+- **Public:** `/`, `/operations`, `/report-issue`, `/ticket`, `/flights`,
+  `/geopolitical`, `/threat-map` and their read APIs (`/api/threat-data`,
+  `/api/geo-data`), plus the public form endpoints (`POST /api/contact`,
+  `/api/ticket`, `/api/newsletter`), which are rate-limited and
+  Turnstile-gated as described above.
 - **Gated:** `/admin` and `/api/admin/*` (the app's own admin rules
   below), `/news` and the briefing (including `/api/news-data`, which
   carries the briefing), `/status`, and `/health`. Stored ticket and
   contact data is reachable only through the gated admin surfaces.
 - This app deliberately does **not** serve Sentinel Command in any form.
+  The site's header links out to the public library hosted on Command's
+  own host; the library is served there, not here. Sentinel Safeguard's
+  mail (Sentinel Mail) likewise runs as a separate service — this
+  application neither serves nor proxies it.
 
 The app itself enforces the gated side in code — gated routes check
 the same admin rule as `/admin` before serving anything — and the
@@ -434,11 +453,13 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is four files — `tests/test_hackproof_proxy.py` (22 tests),
+The suite is seven files — `tests/test_hackproof_proxy.py` (22 tests),
 `tests/test_turnstile.py` (7 tests), `tests/test_front_door.py`
-(4 tests), and `tests/test_bughunt_2026_10_23.py` (17 tests) — with
-**50 tests** in total, verified by collection and a full run from a
-fresh snapshot of this repository on 2026-10-23 (`50 passed`).
+(4 tests), `tests/test_bughunt_2026_10_23.py`,
+`tests/test_visitors_2026_10_23.py` (public visitor logging),
+`tests/test_sweep5_2026_10_24.py`, and `tests/test_phase_two_a.py`
+(the Phase Two pins) — with **88 tests** in total, verified by a full
+run on 2026-10-25 (`88 passed`).
 It builds the app against fake payments upstreams and covers, among other
 things:
 
@@ -466,16 +487,29 @@ things:
   APIs; feed refresh errors surface as a class name only; flight
   numbers are shape-validated and cached before any provider call;
   and a Turnstile token solved on another site's widget is rejected.
+- The Phase Two pins: the homepage and `/operations` live previews
+  render from the public read APIs, the flight preview spends no
+  provider quota, and the shared navigation carries the Operations
+  and Library links on every page.
 
 Page coverage is partial: routing, the in-app gates, response
 headers, and flight-number validation are pinned by the tests above;
-the map pages' rendering is exercised manually via `run.bat`. The
+rendered-page behavior (layouts, maps, previews) is exercised by
+periodic headless-browser censuses — most recently the Phase Two
+census on 2026-10-25 — rather than by pytest. The
 form APIs are covered only where the tests above touch them
 (Turnstile gating, CSV export, newsletter handling, admin
 throttling).
 
 ## Status
 
+- **Phase Two (2026-10-25)** shipped on the production deployment:
+  live previews on the homepage and `/operations`, tracker-page
+  consistency polish, and a full public-page functionality pass. On
+  the separate Sentinel Command service, new Live Intel views
+  (Threat Map, Geopolitics, Flights) read this app's public data
+  APIs — Command remains a separate gated service, and this app
+  still does not serve it.
 - **Current release: v1.0.3** (GitHub Releases), providing
   `SentinelLive.exe` and `SHA256SUMS.txt`. Publishing a GitHub release
   triggers the build workflow (`.github/workflows/build-exe.yml`), which
