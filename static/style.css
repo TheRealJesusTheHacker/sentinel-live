@@ -509,6 +509,35 @@ section { margin-bottom: 1.5em; }
   .acicon.acalert .achalo { animation: none; }
 }
 
+/* Contact (2026-10-25): the dedicated contact page carries the
+   homepage form's contract in the app side's panel language —
+   the form sits on the green-trimmed panel the notes and contact
+   blocks already use, labels in the mono face, fields on near-
+   black with hairline borders, and the send key in the shared
+   green gradient (the global button rule). One column on narrow
+   screens, like the homepage form's own collapse. */
+.contact-panel {
+  background: var(--surf); border: 1px solid var(--grn-dim); border-radius: var(--r-m);
+  padding: 1.3em 1.4em; box-shadow: var(--shadow-1); max-width: 68ch;
+}
+.contact-form { display: grid; grid-template-columns: 1fr 1fr; gap: 1em; }
+.contact-form .field { display: flex; flex-direction: column; gap: .4em; min-width: 0; }
+.contact-form .field-wide { grid-column: 1 / -1; }
+.contact-form label {
+  font-family: var(--font-mono); font-size: .72em; font-weight: 600;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--dim); margin: 0;
+}
+.contact-form .optional { text-transform: none; letter-spacing: 0; opacity: .75; }
+.contact-form input, .contact-form textarea {
+  width: 100%; padding: .7em .85em; border: 1px solid var(--line); border-radius: var(--r-s);
+  background: #000; color: var(--txt); font: inherit; font-size: .95em;
+}
+.contact-form textarea { resize: vertical; min-height: 110px; }
+.contact-form .form-foot { grid-column: 1 / -1; display: flex; align-items: center; gap: 1em; flex-wrap: wrap; }
+.contact-form .btn-send[disabled] { opacity: .6; cursor: wait; }
+.contact-form .form-status { margin: 0; font-size: .92em; color: var(--txt); }
+@media (max-width: 680px) { .contact-form { grid-template-columns: 1fr; } }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   /* SVG route/attack arcs animate stroke-dashoffset via CSS on the

@@ -140,7 +140,7 @@ def test_about_security_plus_stated_in_progress_only(app_mod):
 @pytest.mark.parametrize("path", ["/", "/operations", "/threat-map",
                                   "/geopolitical", "/flights", "/about",
                                   "/services", "/who-we-protect",
-                                  "/how-it-works"])
+                                  "/how-it-works", "/contact"])
 def test_public_pages_never_name_liberty(app_mod, path):
     # Privacy rule (owner, 2026-10-25): the owner's home city never
     # appears in public copy — the service area is stated as Kansas
@@ -174,7 +174,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261025-6" in resp.text
+    assert "/static/style.css?v=20261025-7" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -223,8 +223,10 @@ def test_services_page_renders_five_sections(app_mod):
     # each section asks the question the visitor came with
     assert body.count("Who it is for") == 5
     assert body.count("What you walk away with") == 5
-    # four sections CTA to the contact form, IR to the report page
-    assert body.count('href="/#contact"') >= 5
+    # four sections CTA to the contact page, IR to the report page
+    # (plus the closer's Send a message — five in the page body,
+    # before the header pill and footer are counted)
+    assert body.count('href="/contact"') >= 5
     assert 'href="/report-issue"' in body
 
 
@@ -332,7 +334,7 @@ def test_who_we_protect_residential_and_open_door_present(app_mod):
         "Don't see your world here?",
         "it was never a fence",
         "solo operators",
-        'href="/#contact"',
+        'href="/contact"',
     ):
         assert phrase in body, phrase
 
@@ -430,7 +432,7 @@ def test_how_it_works_page_renders_six_steps(app_mod):
     assert 'href="/services#penetration-testing"' in body
     assert 'href="/services#incident-response"' in body
     assert 'href="/report-issue"' in body
-    assert 'href="/#contact"' in body
+    assert 'href="/contact"' in body
 
 
 def test_how_it_works_names_the_real_forms(app_mod):
@@ -527,3 +529,119 @@ def test_threat_counters_are_countup_targets(app_mod):
     assert "SSG.countUp" in resp.text
     # first-load-only animation, refreshes update in place
     assert "cuFirst" in resp.text
+
+
+# ------------------------------------------------------------- contact
+def test_contact_page_renders_direct_block_and_guidance(app_mod):
+    resp = _client(app_mod).get("/contact")
+    assert resp.status_code == 200
+    body = _flat(resp.text)
+    for fact in (
+        "Contact —",
+        "talk to Sentinel",
+        "by appointment only",
+        "no walk-ins",
+        "Kansas City, Missouri",
+        "816-533-8418",
+        "Sentinelsafeguard@outlook.com",
+        "By appointment only",
+        'id="what-to-include"',
+        "What to include in your message",
+        "What you need protected",
+        "Where it is",
+        "Kansas City metro",
+        "Anything already going wrong",
+        'id="emergencies"',
+        "Something wrong right now?",
+        "open around the clock",
+        'href="/report-issue"',
+        'href="/services#incident-response"',
+        'href="/how-it-works"',
+        'href="/who-we-protect"',
+        "businesses and homes",
+    ):
+        assert fact in body, fact
+    # the form never reads as the emergency channel
+    assert "This form is not the emergency channel" in body
+
+
+def test_contact_form_replicates_homepage_contract(app_mod):
+    # Form-contract parity with the static homepage form
+    # (sentinel-live-deploy/site/index.html): same form id, same
+    # field ids/names/types/limits, same Turnstile widget
+    # (dark/flexible, same public sitekey), same payload keys and
+    # endpoint, same success/error wording, same noscript fallback.
+    body = _client(app_mod).get("/contact").text
+    for snippet in (
+        '<form class="contact-form" id="contact-form">',
+        '<input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="120">',
+        '<input id="cf-email" name="email" type="email" autocomplete="email" required maxlength="160">',
+        '<input id="cf-subject" name="subject" type="text" maxlength="160">',
+        '<textarea id="cf-message" name="message" rows="5" required maxlength="5000"',
+        'data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"',
+        'id="cf-submit"',
+        'id="cf-status" role="status" aria-live="polite"',
+        "This form needs JavaScript — email Sentinelsafeguard@outlook.com or call 816-533-8418 instead.",
+        "fetch('/api/contact'",
+        "'cf-turnstile-response':tsToken()",
+        "Got it — your message is in.",
+        "You can also email Sentinelsafeguard@outlook.com or call 816-533-8418.",
+        "That did not go through. Email Sentinelsafeguard@outlook.com or call 816-533-8418",
+        "https://challenges.cloudflare.com/turnstile/v0/api.js",
+    ):
+        assert snippet in body, snippet
+
+
+def test_contact_page_carries_no_prohibited_claims(app_mod):
+    # A contact page is where sites invent reply promises — this
+    # one must not: no response times, no SLAs, no reply-speed
+    # claims of any kind, alongside the standing prohibitions.
+    body = _client(app_mod).get("/contact").text.lower()
+    for banned in (
+        "cyberdogs",
+        "offleash",
+        "trusted by",
+        "testimonial",
+        "our experts",
+        "our team of",
+        "our clients",
+        "clients include",
+        "satisfied clients",
+        "businesses served",
+        "starting at",
+        "$",
+        "guarantee",
+        "response time",
+        "respond within",
+        "we reply",
+        "we'll reply",
+        "reply within",
+        "get back to you within",
+        "within 24",
+        "within one business day",
+        "same-day response",
+        "fast response",
+        "quick response",
+        "sla",
+        "private security guard",
+        "private investigation",
+    ):
+        assert banned not in body, banned
+
+
+def test_contact_nav_pill_active_footer_and_visitor_log(app_mod):
+    client = _client(app_mod)
+    resp = client.get("/contact")
+    # the header pill IS the /contact link now, with active marking
+    assert 'class="nav-cta active"' in resp.text
+    assert 'href="/contact" aria-current="page"' in resp.text
+    assert "/contact" in app_mod._VISITOR_PUBLIC_PATHS
+    # no app page still points at the homepage's /#contact anchor
+    for path in ("/contact", "/about", "/services", "/who-we-protect",
+                 "/how-it-works", "/operations", "/threat-map",
+                 "/geopolitical", "/flights"):
+        page = client.get(path)
+        assert page.status_code == 200
+        assert 'href="/#contact"' not in page.text, path
+        # pill + footer at minimum
+        assert page.text.count('href="/contact"') >= 2, path

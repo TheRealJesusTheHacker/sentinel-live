@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Contact{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Contact — <span class="grn">talk to Sentinel</span></h1>
+  <p class="sub">Sentinel works <strong>by appointment only</strong> —
+  there are no walk-ins. Call, email, or send the form below, and a
+  time is set. This page is every way to reach the company, stated
+  plainly.</p>
+  <nav class="svc-jump" aria-label="On this page">
+    <a href="#message">Send a Message</a>
+    <a href="#direct">Call or Email</a>
+    <a href="#what-to-include">What to Include</a>
+    <a href="#emergencies">Emergencies</a>
+    <a href="#after-you-write">After You Write</a>
+  </nav>
+</section>
+
+<section class="svc rv" id="message">
+  <p class="svc-kicker">The form</p>
+  <h2>Send a message</h2>
+  <p class="svc-what">Tell Sentinel what you are building, what is
+  breaking, or what keeps you up at night. The form below is the
+  same one the homepage carries, and it goes to the same
+  place.</p>
+  <div class="contact-panel">
+    <form class="contact-form" id="contact-form">
+      <div class="field"><label for="cf-name">Your name</label><input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="120"></div>
+      <div class="field"><label for="cf-email">Email</label><input id="cf-email" name="email" type="email" autocomplete="email" required maxlength="160"></div>
+      <div class="field field-wide"><label for="cf-subject">Subject <span class="optional">(optional)</span></label><input id="cf-subject" name="subject" type="text" maxlength="160"></div>
+      <div class="field field-wide"><label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="5" required maxlength="5000" placeholder="What are you building, what’s breaking, or what keeps you up at night?"></textarea></div>
+      <div class="field field-wide"><div class="cf-turnstile" data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"></div></div>
+      <div class="form-foot"><button class="btn-send" type="submit" id="cf-submit">Send message</button><p class="form-status" id="cf-status" role="status" aria-live="polite"></p></div>
+      <noscript><p class="form-status">This form needs JavaScript — email Sentinelsafeguard@outlook.com or call 816-533-8418 instead.</p></noscript>
+    </form>
+  </div>
+</section>
+
+<section class="svc rv" id="direct">
+  <p class="svc-kicker">Direct</p>
+  <h2>Call or email</h2>
+  <p class="svc-what">The form is not the only door. Reach Sentinel
+  directly:</p>
+  <p class="svc-note">Kansas City, Missouri &middot;
+  <a href="tel:+18165338418">816-533-8418</a> &middot;
+  <a href="mailto:Sentinelsafeguard@outlook.com">Sentinelsafeguard@outlook.com</a>
+  &middot; <strong>By appointment only</strong> — call, email, or send
+  a message, and a time is set.</p>
+</section>
+
+<section class="svc rv" id="what-to-include">
+  <p class="svc-kicker">Before you write</p>
+  <h2>What to include in your message</h2>
+  <p class="svc-what">Three things make a first message easy to act
+  on. None of them needs to be long, and none of them needs to be
+  technical:</p>
+  <div class="svc-cols">
+    <div>
+      <h3>What you need protected</h3>
+      <p>The business, the building, the systems, the records — in
+      your own words. “Everything, probably” is an honest answer
+      and a fine place to start.</p>
+    </div>
+    <div>
+      <h3>Where it is</h3>
+      <p>A business or a home, and where in the Kansas City metro
+      it sits. Sentinel is on-site first, so the where matters as
+      much as the what.</p>
+    </div>
+  </div>
+  <p class="svc-what"><strong>Anything already going wrong.</strong>
+  A locked account, a camera that stopped recording, a machine
+  behaving like it is not yours — say so plainly. If it is
+  happening right now, do not wait on this form: use the report
+  page in the emergencies note below instead.</p>
+</section>
+
+<section class="svc rv" id="emergencies">
+  <p class="svc-kicker">Emergencies</p>
+  <h2>Something wrong right now?</h2>
+  <p class="svc-note"><strong>This form is not the emergency
+  channel.</strong> If an account is compromised, a machine is
+  behaving like it is not yours, or data is somewhere it should not
+  be, go straight to the <a href="/report-issue">report page</a> —
+  it is open around the clock and reaches Sentinel directly — and
+  see <a href="/services#incident-response">incident response</a>
+  for how that work runs.</p>
+</section>
+
+<section class="svc rv" id="after-you-write">
+  <p class="svc-kicker">Next</p>
+  <h2>What happens after you write</h2>
+  <p class="svc-what">The full process — the first conversation,
+  the look at your environment, the scope in writing before any
+  work begins — is laid out step by step on
+  <a href="/how-it-works">How It Works</a>, so you know exactly
+  what a message here starts. And if you are wondering whether
+  Sentinel takes work like yours: it protects businesses and homes
+  alike — see <a href="/who-we-protect">Who We Protect</a>.</p>
+  <p><a class="btn-link" href="/how-it-works">See how an engagement works &rarr;</a>
+  &nbsp;&nbsp;
+  <a class="btn-link" href="/who-we-protect">See who Sentinel protects &rarr;</a></p>
+</section>
+{% endblock %}
+{% block scripts %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script>
+(function(){
+  var form=document.getElementById('contact-form');
+  if(!form)return;
+  var status=document.getElementById('cf-status');
+  var button=document.getElementById('cf-submit');
+  function tsToken(){var i=form.querySelector('input[name="cf-turnstile-response"]');return i?i.value:'';}
+  function tsReset(){if(window.turnstile){try{turnstile.reset();}catch(e){}}}
+  form.addEventListener('submit',function(ev){
+    ev.preventDefault();
+    status.textContent='Sending…';
+    button.disabled=true;
+    var payload={
+      name:document.getElementById('cf-name').value.trim(),
+      email:document.getElementById('cf-email').value.trim(),
+      subject:document.getElementById('cf-subject').value.trim(),
+      message:document.getElementById('cf-message').value.trim(),
+      'cf-turnstile-response':tsToken()
+    };
+    fetch('/api/contact',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)})
+    .then(function(res){return res.json().catch(function(){return{};}).then(function(data){return{ok:res.ok,data:data};});})
+    .then(function(r){
+      button.disabled=false;
+      tsReset();
+      if(r.ok&&r.data.ok){
+        form.reset();
+        status.textContent='Got it — your message is in. We’ll get back to you at the email you gave us.';
+      }else{
+        status.textContent=((r.data&&r.data.detail)?r.data.detail+' ':'Something went wrong sending that. ')+'You can also email Sentinelsafeguard@outlook.com or call 816-533-8418.';
+      }
+    })
+    .catch(function(){
+      button.disabled=false;
+      tsReset();
+      status.textContent='That did not go through. Email Sentinelsafeguard@outlook.com or call 816-533-8418 and we’ll take it from there.';
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -470,7 +470,7 @@ _VISITOR_TABLE_SQL = (
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
-                         "/services", "/who-we-protect", "/how-it-works"}
+                         "/services", "/who-we-protect", "/how-it-works", "/contact"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -981,6 +981,19 @@ async def how_it_works(request: Request):
     # /services, and /who-we-protect: no prices, no invented
     # response times or SLAs, no client history.
     return templates.TemplateResponse(request, "how_it_works.html", _ctx(request))
+
+
+@app.get("/contact", response_class=HTMLResponse)
+async def contact(request: Request):
+    # Contact (owner order 2026-10-25): the dedicated contact page
+    # — the homepage contact form's contract replicated exactly
+    # (same fields, same Turnstile widget, same /api/contact
+    # payload and success/error handling), the direct phone/email
+    # block, what-to-include guidance, and the emergencies strip
+    # pointing at /report-issue so the form never reads as the
+    # emergency channel. No response-time promises anywhere: the
+    # site states none, and this page invents none.
+    return templates.TemplateResponse(request, "contact.html", _ctx(request))
 
 
 @app.get("/operations", response_class=HTMLResponse)
