@@ -139,9 +139,129 @@
     .contact-form input,.contact-form textarea{background:#060806;border-color:var(--line);color:var(--ink)}
     .contact-form input::placeholder,.contact-form textarea::placeholder{color:var(--muted);opacity:1}
     .contact-form input:focus,.contact-form textarea:focus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px}
+
+    /* Premium welcome splash — homepage entry only (2026-10-26).
+       The overlay is hidden by default and only the inline entry
+       controller can reveal it, so a visitor without JavaScript is
+       never blocked. Motion uses transform/opacity only and stays
+       inside the black / emerald / white system: the glitch is made
+       from thin monochrome and emerald slices, never an RGB split. */
+    html.splash-lock,body.splash-lock{overflow:hidden!important;overscroll-behavior:none}
+    .sentinel-splash[hidden]{display:none!important}
+    .sentinel-splash{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;overflow:hidden;background:#060806;color:#d7e0d8;cursor:pointer;isolation:isolate;opacity:1;transition:opacity .34s ease}
+    .sentinel-splash::before{content:"";position:absolute;inset:0;z-index:-2;background:radial-gradient(circle at 50% 42%,rgba(0,230,118,.11),rgba(0,230,118,0) 34%),radial-gradient(circle at 50% 118%,rgba(0,230,118,.06),rgba(0,230,118,0) 46%),linear-gradient(rgba(255,255,255,.007) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.01) 1px,transparent 1px);background-size:auto,auto,100% 4px,72px 72px}
+    .sentinel-splash::after{content:"";position:absolute;inset:-12% auto -12% 0;z-index:-1;width:22%;background:linear-gradient(90deg,rgba(0,230,118,0),rgba(0,230,118,.075),rgba(255,255,255,.035),rgba(0,230,118,0));opacity:0;transform:translate3d(-150%,0,0);animation:splashScan 1.55s cubic-bezier(.22,.61,.21,1) .18s both}
+    .sentinel-splash.is-exiting{opacity:0;pointer-events:none}
+    .sentinel-splash__inner{position:relative;display:grid;justify-items:center;gap:clamp(17px,3vh,27px);padding:28px 22px;text-align:center}
+    .sentinel-splash__logo{position:relative;width:min(330px,78vw);aspect-ratio:3/2;filter:drop-shadow(0 0 26px rgba(0,230,118,.12))}
+    .sentinel-splash__logo img{position:absolute;inset:0;width:100%;height:100%;display:block;object-fit:cover;object-position:center 56%}
+    .sentinel-splash__logo-base{opacity:0;transform:translate3d(0,10px,0) scale(.968);animation:splashLogoResolve 1.08s cubic-bezier(.19,.72,.18,1) .08s both}
+    .sentinel-splash__slice{opacity:0;pointer-events:none}
+    .sentinel-splash__slice--one{clip-path:inset(7% 0 68% 0);animation:splashSliceOne .52s steps(2,end) .22s both}
+    .sentinel-splash__slice--two{clip-path:inset(43% 0 39% 0);animation:splashSliceTwo .46s steps(2,end) .38s both}
+    .sentinel-splash__slice--three{clip-path:inset(72% 0 7% 0);animation:splashSliceThree .42s steps(2,end) .52s both}
+    .sentinel-splash__word{position:relative;margin:0;color:#eafff3;font-size:clamp(2.05rem,8vw,4.35rem);font-weight:780;line-height:.96;letter-spacing:.34em;text-indent:.34em;text-transform:uppercase;white-space:nowrap}
+    .sentinel-splash__word::before,.sentinel-splash__word::after{content:attr(data-text);position:absolute;inset:0;opacity:0;pointer-events:none}
+    .sentinel-splash__word::before{color:#fff;clip-path:inset(8% 0 58% 0);animation:splashWordGhost .24s steps(2,end) 1.08s both}
+    .sentinel-splash__word::after{color:#00e676;clip-path:inset(57% 0 9% 0);animation:splashWordGhostAlt .24s steps(2,end) 1.08s both}
+    .sentinel-splash__word span{position:relative;z-index:1;display:inline-block;opacity:0;transform:translate3d(0,12px,0);animation:splashLetterIn .48s cubic-bezier(.19,.72,.18,1) both;animation-delay:var(--d)}
+    .sentinel-splash__trace{position:relative;width:min(318px,74vw);height:1px;overflow:hidden;background:rgba(255,255,255,.13)}
+    .sentinel-splash__trace::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,rgba(0,230,118,0),#00e676 18%,#eafff3 50%,#00e676 82%,rgba(0,230,118,0));transform:translate3d(-105%,0,0);animation:splashTrace 1.05s cubic-bezier(.22,.61,.21,1) .68s both}
+    .sentinel-splash__skip{margin:2px 0 0;color:#7d8a7e;font-family:"IBM Plex Mono",monospace;font-size:.64rem;font-weight:500;letter-spacing:.18em;text-transform:uppercase;opacity:0;animation:splashSkipIn .4s ease 1.05s both}
+    @keyframes splashScan{0%{opacity:0;transform:translate3d(-150%,0,0)}16%{opacity:1}78%{opacity:.72}100%{opacity:0;transform:translate3d(610%,0,0)}}
+    @keyframes splashLogoResolve{0%{opacity:0;transform:translate3d(0,12px,0) scale(.962)}22%{opacity:1;transform:translate3d(-4px,5px,0) scale(.982)}39%{transform:translate3d(3px,2px,0) scale(.992)}58%{transform:translate3d(-1px,0,0) scale(1.004)}100%{opacity:1;transform:translate3d(0,0,0) scale(1)}}
+    @keyframes splashSliceOne{0%{opacity:0;transform:translate3d(-16px,0,0)}24%{opacity:.58}52%{opacity:.38;transform:translate3d(7px,0,0)}100%{opacity:0;transform:translate3d(0,0,0)}}
+    @keyframes splashSliceTwo{0%{opacity:0;transform:translate3d(13px,0,0)}28%{opacity:.5}58%{opacity:.3;transform:translate3d(-6px,0,0)}100%{opacity:0;transform:translate3d(0,0,0)}}
+    @keyframes splashSliceThree{0%{opacity:0;transform:translate3d(-9px,0,0)}30%{opacity:.44}100%{opacity:0;transform:translate3d(2px,0,0)}}
+    @keyframes splashLetterIn{from{opacity:0;transform:translate3d(0,12px,0)}100%{opacity:1;transform:translate3d(0,0,0)}}
+    @keyframes splashWordGhost{0%{opacity:0;transform:translate3d(0,0,0)}24%{opacity:.5;transform:translate3d(-3px,0,0)}52%{opacity:.3;transform:translate3d(2px,0,0)}100%{opacity:0;transform:translate3d(0,0,0)}}
+    @keyframes splashWordGhostAlt{0%{opacity:0;transform:translate3d(0,0,0)}26%{opacity:.42;transform:translate3d(3px,0,0)}54%{opacity:.24;transform:translate3d(-2px,0,0)}100%{opacity:0;transform:translate3d(0,0,0)}}
+    @keyframes splashTrace{from{transform:translate3d(-105%,0,0)}100%{transform:translate3d(105%,0,0)}}
+    @keyframes splashSkipIn{from{opacity:0}to{opacity:.78}}
+    @media(max-width:560px){.sentinel-splash__logo{width:min(302px,84vw)}.sentinel-splash__word{letter-spacing:.27em;text-indent:.27em}}
+    @media(prefers-reduced-motion:reduce){.sentinel-splash{transition:opacity .18s ease}.sentinel-splash::before{background:radial-gradient(circle at 50% 42%,rgba(0,230,118,.1),rgba(0,230,118,0) 38%),#060806}.sentinel-splash::after,.sentinel-splash__slice,.sentinel-splash__trace{display:none!important}.sentinel-splash__logo-base,.sentinel-splash__word span,.sentinel-splash__skip{opacity:1!important;transform:none!important;animation:none!important}.sentinel-splash__word::before,.sentinel-splash__word::after{display:none!important}}
   </style>
 </head>
 <body>
+<div class="sentinel-splash" id="sentinel-splash" role="status" aria-label="Welcome to Sentinel Safeguard" hidden>
+  <div class="sentinel-splash__inner">
+    <div class="sentinel-splash__logo" aria-hidden="true">
+      <img class="sentinel-splash__logo-base" src="/assets/sentinel-safeguard-logo.jpg" alt="" width="390" height="475" fetchpriority="high">
+      <img class="sentinel-splash__slice sentinel-splash__slice--one" src="/assets/sentinel-safeguard-logo.jpg" alt="" width="390" height="475" aria-hidden="true">
+      <img class="sentinel-splash__slice sentinel-splash__slice--two" src="/assets/sentinel-safeguard-logo.jpg" alt="" width="390" height="475" aria-hidden="true">
+      <img class="sentinel-splash__slice sentinel-splash__slice--three" src="/assets/sentinel-safeguard-logo.jpg" alt="" width="390" height="475" aria-hidden="true">
+    </div>
+    <p class="sentinel-splash__word" data-text="WELCOME" aria-hidden="true"><span style="--d:.5s">W</span><span style="--d:.57s">E</span><span style="--d:.64s">L</span><span style="--d:.71s">C</span><span style="--d:.78s">O</span><span style="--d:.85s">M</span><span style="--d:.92s">E</span></p>
+    <div class="sentinel-splash__trace" aria-hidden="true"></div>
+    <p class="sentinel-splash__skip" aria-hidden="true">Tap or press any key to enter</p>
+  </div>
+</div>
+<script>
+(function(){
+  var splash=document.getElementById('sentinel-splash');
+  if(!splash)return;
+  var storageKey='sentinel-splash-welcome-v1';
+  var alreadySeen=false;
+  try{
+    alreadySeen=window.sessionStorage.getItem(storageKey)==='1';
+    if(!alreadySeen)window.sessionStorage.setItem(storageKey,'1');
+  }catch(e){}
+  if(alreadySeen){splash.remove();return;}
+
+  var root=document.documentElement;
+  var body=document.body;
+  var reduced=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var finished=false;
+  var dismissTimer=0;
+  var removeTimer=0;
+  var hardTimer=0;
+
+  function detach(){
+    window.clearTimeout(dismissTimer);
+    window.clearTimeout(removeTimer);
+    window.clearTimeout(hardTimer);
+    splash.removeEventListener('pointerdown',dismiss);
+    splash.removeEventListener('click',dismiss);
+    window.removeEventListener('keydown',dismiss,true);
+  }
+  function removeSplash(){
+    if(finished)return;
+    finished=true;
+    detach();
+    root.classList.remove('splash-lock');
+    if(body)body.classList.remove('splash-lock');
+    splash.remove();
+  }
+  function dismiss(){
+    if(finished)return;
+    splash.classList.add('is-exiting');
+    removeTimer=window.setTimeout(removeSplash,reduced?90:350);
+  }
+
+  splash.hidden=false;
+  root.classList.add('splash-lock');
+  if(body)body.classList.add('splash-lock');
+  splash.addEventListener('pointerdown',dismiss,{passive:true});
+  splash.addEventListener('click',dismiss);
+  window.addEventListener('keydown',dismiss,true);
+  dismissTimer=window.setTimeout(dismiss,reduced?620:1740);
+  /* Independent of every animation and transition: if anything in
+     the visual sequence stalls, the visitor is released anyway. */
+  hardTimer=window.setTimeout(removeSplash,reduced?1250:2600);
+})();
+</script>
+<script>
+/* Last-resort splash watchdog: this separate timer still runs if the
+   entry controller above is interrupted after revealing the overlay. */
+window.setTimeout(function(){
+  var splash=document.getElementById('sentinel-splash');
+  if(splash&&!splash.hidden){
+    document.documentElement.classList.remove('splash-lock');
+    if(document.body)document.body.classList.remove('splash-lock');
+    splash.remove();
+  }
+},3400);
+</script>
 <div class="page">
   <div class="wrap utility" aria-label="Contact shortcuts"><div class="utility-note"><span class="pulse" aria-hidden="true"></span><span>Kansas City–based. On-site and remote.</span></div><div class="utility-links"><a href="tel:+18165338418">816-533-8418</a><a href="mailto:Sentinelsafeguard@outlook.com">Email us</a></div></div>
   <nav class="site-nav" aria-label="Site"><div class="wrap"><a class="brand" href="/"><img class="brand-logo" src="/assets/sentinel-safeguard-mark.jpg" alt="" width="60" height="40"><span>Sentinel Safeguard</span></a><ul><li><a href="/" aria-current="page">Home</a></li><li><a href="/about">About</a></li><li><a href="/services">Services</a></li><li><a href="/who-we-protect">Who We Protect</a></li><li><a href="/how-it-works">How It Works</a></li><li><a href="/insights">Insights</a></li><li><a href="/sentinel-news">Sentinel News</a></li><li><a href="/privacy">Privacy</a></li><li><a href="/operations">Operations</a></li><li><a href="/threat-map">Threat Map</a></li><li><a href="/geopolitical">Geopolitical</a></li><li><a href="/flights">Flights</a></li><li><a href="https://command.sentinelsafeguard.net/library">Library</a></li><li><a href="/report-issue">Report an Issue</a></li></ul><a class="nav-cta" href="/contact">Contact</a></div></nav>
