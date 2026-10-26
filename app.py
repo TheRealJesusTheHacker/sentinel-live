@@ -1355,7 +1355,35 @@ def _avail_fmt_ms_time(ms):
         d.strftime("%I:%M %p").lstrip("0"))
 
 
+_availability_cache = {"key": None, "summary": None}
+
+
 def _availability_summary():
+    """SECAUDIT-2026-10-25: cached front for the compute below.
+    /availability is a public, unauthenticated page and the raw
+    compute re-reads and re-parses the whole 35-day monitor log on
+    every hit — free CPU amplification for anyone who cares to
+    refresh hard. Cache on the log's (path, mtime, size) plus a
+    one-minute time bucket: an unchanged log is re-parsed at most
+    once a minute no matter the request rate, a fresh monitor
+    append invalidates immediately, and the bucket keeps the
+    "stale" flag honest (it is recomputed at least once a minute
+    even when the log has stopped moving)."""
+    try:
+        st = AVAILABILITY_LOG_PATH.stat()
+        key = (str(AVAILABILITY_LOG_PATH), st.st_mtime_ns, st.st_size,
+               int(time.time()) // 60)
+    except Exception:
+        return _availability_summary_compute()
+    if _availability_cache["key"] == key:
+        return _availability_cache["summary"]
+    summary = _availability_summary_compute()
+    _availability_cache["key"] = key
+    _availability_cache["summary"] = summary
+    return summary
+
+
+def _availability_summary_compute():
     """Compute the availability page's data from the monitor log.
 
     Honesty rules (coordinator contract): "checking since" is the
@@ -1644,7 +1672,13 @@ def _internal_token() -> str:
 
 def _visitors_gate(request: Request):
     def _nope():
-        raise HTTPException(404, "Not found.")
+        # SECAUDIT-2026-10-25: the detail must byte-match the
+        # framework's own 404 ("Not Found") for an unmatched path.
+        # The app's raised-404 style ("Not found.") is fine on
+        # public routes, but here it told an outside prober exactly
+        # which paths are real-but-gated and which do not exist —
+        # an existence oracle against the stealth contract above.
+        raise HTTPException(404, "Not Found")
     # (a) The TCP peer must be loopback — the console calls over SSH
     # or from the same box; tunnel traffic arrives AS loopback too,
     # which is what gate (b) exists for.
@@ -1816,7 +1850,20 @@ async def _json_body(request: Request):
 
     Factored out of the form handlers, which each repeated this exact
     parse + type check; raises the same 400 "Invalid JSON." they did,
-    for both an unparseable body and a non-dict one."""
+    for both an unparseable body and a non-dict one.
+
+    SECAUDIT-2026-10-25: the media type must be application/json.
+    request.json() parses the body whatever Content-Type arrived,
+    so a cross-site page could store a form submission with a
+    CORS-safelisted text/plain POST (no preflight, no Turnstile
+    token of its own — the victim's browser supplies the request).
+    Every real caller (the site's forms, the admin API's clients)
+    already sends application/json; anything else is a 415 before
+    the body is even parsed."""
+    _ctype = (request.headers.get("content-type") or "") \
+        .split(";")[0].strip().lower()
+    if _ctype != "application/json":
+        raise HTTPException(415, "Content-Type must be application/json.")
     try:
         body = await request.json()
     except Exception:
