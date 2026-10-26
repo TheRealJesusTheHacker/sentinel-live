@@ -297,6 +297,7 @@ footer {
 .leaflet-control-scale-line { background: rgba(0,0,0,.55); color: #fff; border-color: var(--dim); font-size: 10px; }
 .leaflet-control-attribution { background: rgba(0,0,0,.55) !important; color: var(--dim) !important; font-size: 9px !important; }
 .leaflet-control-attribution a { color: var(--dim) !important; }
+.leaflet-control-layers-toggle { color: var(--txt) !important; }
 
 .pulse { background: var(--red); border-radius: 50%; border: 2px solid #ff8888;
   animation: pulse 1.6s ease-out infinite; }
