@@ -22,7 +22,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@90..110,400..800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <script>document.documentElement.classList.add('js');</script>
-<link rel="stylesheet" href="/static/style.css?v=20261026-1">
+<link rel="stylesheet" href="/static/style.css?v=20261026-2">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -39,6 +39,7 @@
     <a href="/who-we-protect"{% if request.url.path == '/who-we-protect' %} class="active" aria-current="page"{% endif %}>Who We Protect</a>
     <a href="/how-it-works"{% if request.url.path == '/how-it-works' %} class="active" aria-current="page"{% endif %}>How It Works</a>
     <a href="/insights"{% if request.url.path.startswith('/insights') %} class="active" aria-current="page"{% endif %}>Insights</a>
+    <a href="/sentinel-news"{% if request.url.path.startswith('/sentinel-news') %} class="active" aria-current="page"{% endif %}>Sentinel News</a>
     <a href="/privacy"{% if request.url.path == '/privacy' %} class="active" aria-current="page"{% endif %}>Privacy</a>
     <a href="/operations"{% if request.url.path == '/operations' %} class="active" aria-current="page"{% endif %}>Operations</a>
     <a href="/threat-map"{% if request.url.path == '/threat-map' %} class="active" aria-current="page"{% endif %}>Threat Map</a>

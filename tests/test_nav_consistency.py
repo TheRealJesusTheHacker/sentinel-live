@@ -41,6 +41,10 @@ CANONICAL_NAV = [
     ("/who-we-protect", "Who We Protect"),
     ("/how-it-works", "How It Works"),
     ("/insights", "Insights"),
+    # NAV-PROMOTION-2026-10-26: Sentinel News was footer-only at
+    # its morning launch; the owner ordered it promoted to its
+    # own header tab the same day. The canonical set is now 15.
+    ("/sentinel-news", "Sentinel News"),
     ("/privacy", "Privacy"),
     ("/operations", "Operations"),
     ("/threat-map", "Threat Map"),
@@ -60,10 +64,15 @@ CANONICAL_FOOTER = [
     # SENTINEL-NEWS-2026-10-26: Sentinel News joins the FOOTER
     # only, like the sweep's pages — the header band stays the
     # canonical 14.
+    # NAV-PROMOTION-2026-10-26: hours later the owner ordered
+    # Sentinel News promoted to its own header tab (CANONICAL_NAV
+    # above is now 15); it stays in the footer too — this footer
+    # set itself is unchanged by the promotion.
     ("/sentinel-news", "Sentinel News"),
     # ESTATE-2026-10-25: the sweep's new public pages join the
     # FOOTER only — the header band stays at the canonical 14 (its
-    # tightening band is load-bearing; see the WWP census pin).
+    # tightening band is load-bearing; see the WWP census pin;
+    # the band grew to 15 with the 2026-10-26 nav promotion).
     ("/assessment", "Assessment"),
     ("/tools", "Tools"),
     ("/training/phishing", "Phishing Training"),

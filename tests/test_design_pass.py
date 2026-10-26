@@ -202,7 +202,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261026-1" in resp.text
+    assert "/static/style.css?v=20261026-2" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -424,10 +424,18 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # nav 1512 + bar padding 38), past the 1800px top edge. The
     # band now reaches 1900px (+72 over need), and this pin moved
     # with it again.
+    # Sentinel News (2026-10-26) is the next one after that —
+    # fourteen destinations, promoted from the footer to its own
+    # header tab by owner order: the link adds ~137px (advance
+    # width at the nav's metrics, cross-checked against this
+    # series' census increments), nav content ~1649px, natural
+    # need ~1965px, past the 1900px top edge. The band now
+    # reaches 2040px (+75 over need, in line with the earlier
+    # margins), and this pin moved with it again.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 1900px) and (min-width: 861px)" in css
+    assert "@media (max-width: 2040px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 1900px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 2040px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 

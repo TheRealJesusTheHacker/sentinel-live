@@ -114,7 +114,10 @@ def test_stylesheet_version_query_bumped(app_mod):
     # -7 was the Contact page's form-panel styles; -8 is the
     # Insights notebook styles (.ins-* cards + post measure).
     # -9 is the Privacy page's nav-band widening (1900px).
-    assert "/static/style.css?v=20261026-1" in resp.text
+    # 20261026-1 was the Sentinel News page build; 20261026-2 is
+    # the Sentinel News nav promotion (2026-10-26) — the header
+    # band widening to 2040px for its own tab.
+    assert "/static/style.css?v=20261026-2" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):
