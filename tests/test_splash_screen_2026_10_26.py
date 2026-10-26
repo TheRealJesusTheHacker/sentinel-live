@@ -107,9 +107,12 @@ def test_once_per_session_skip_and_fallback_logic_are_present():
         "splash.addEventListener('pointerdown',dismiss",
         "splash.addEventListener('click',dismiss)",
         "window.addEventListener('keydown',dismiss,true)",
-        "dismissTimer=window.setTimeout(dismiss,reduced?620:1740)",
-        "hardTimer=window.setTimeout(removeSplash,reduced?1250:2600)",
-        "},3400);",
+        # Retimed 2026-10-26 (owner feedback): longer clean hold —
+        # fade at ~3.9s, force-dismiss fallback ~4.7s, watchdog 5.5s.
+        # Reduced motion stays brief (620 / 1250).
+        "dismissTimer=window.setTimeout(dismiss,reduced?620:3900)",
+        "hardTimer=window.setTimeout(removeSplash,reduced?1250:4700)",
+        "},5500);",
     ):
         assert token in html, token
 

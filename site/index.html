@@ -244,10 +244,13 @@
   splash.addEventListener('pointerdown',dismiss,{passive:true});
   splash.addEventListener('click',dismiss);
   window.addEventListener('keydown',dismiss,true);
-  dismissTimer=window.setTimeout(dismiss,reduced?620:1740);
+  /* Retimed 2026-10-26 (owner feedback): the intro choreography is
+     unchanged; the final clean hold is longer, so the fade begins at
+     ~3.9s and the force-dismiss fallback sits at ~4.7s. */
+  dismissTimer=window.setTimeout(dismiss,reduced?620:3900);
   /* Independent of every animation and transition: if anything in
      the visual sequence stalls, the visitor is released anyway. */
-  hardTimer=window.setTimeout(removeSplash,reduced?1250:2600);
+  hardTimer=window.setTimeout(removeSplash,reduced?1250:4700);
 })();
 </script>
 <script>
@@ -260,7 +263,7 @@ window.setTimeout(function(){
     if(document.body)document.body.classList.remove('splash-lock');
     splash.remove();
   }
-},3400);
+},5500);
 </script>
 <div class="page">
   <div class="wrap utility" aria-label="Contact shortcuts"><div class="utility-note"><span class="pulse" aria-hidden="true"></span><span>Kansas City–based. On-site and remote.</span></div><div class="utility-links"><a href="tel:+18165338418">816-533-8418</a><a href="mailto:Sentinelsafeguard@outlook.com">Email us</a></div></div>
