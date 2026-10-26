@@ -46,9 +46,10 @@
     .contact-form .field-wide{grid-column:1/-1}
     .contact-form label{font-family:"IBM Plex Mono",monospace;font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase}
     .contact-form .optional{text-transform:none;letter-spacing:0;opacity:.75}
-    .contact-form input,.contact-form textarea{width:100%;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent-ink) 42%,transparent);border-radius:var(--radius-s);background:color-mix(in srgb,var(--dark) 82%,transparent);color:var(--on-dark);font:inherit;font-size:.95rem}
+    .contact-form input,.contact-form textarea,.contact-form select{width:100%;padding:12px 14px;border:1px solid color-mix(in srgb,var(--accent-ink) 42%,transparent);border-radius:var(--radius-s);background:color-mix(in srgb,var(--dark) 82%,transparent);color:var(--on-dark);font:inherit;font-size:.95rem}
     .contact-form input::placeholder,.contact-form textarea::placeholder{color:var(--on-dark-muted)}
-    .contact-form input:focus,.contact-form textarea:focus{outline:3px solid color-mix(in srgb,var(--dark) 55%,transparent);outline-offset:1px;border-color:var(--accent-ink)}
+    .contact-form input:focus,.contact-form textarea:focus,.contact-form select:focus{outline:3px solid color-mix(in srgb,var(--dark) 55%,transparent);outline-offset:1px;border-color:var(--accent-ink)}
+    .contact-form select option{color:var(--dark);background:#ffffff}
     .contact-form textarea{resize:vertical;min-height:110px}
     .contact-form .form-foot{grid-column:1/-1;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
     .contact-form .btn{border-color:color-mix(in srgb,var(--accent-ink) 55%,transparent);cursor:pointer;font:inherit}
@@ -298,6 +299,9 @@ window.setTimeout(function(){
         <div class="field"><label for="cf-name">Your name</label><input id="cf-name" name="name" type="text" autocomplete="name" required maxlength="120"></div>
         <div class="field"><label for="cf-email">Email</label><input id="cf-email" name="email" type="email" autocomplete="email" required maxlength="160"></div>
         <div class="field field-wide"><label for="cf-subject">Subject <span class="optional">(optional)</span></label><input id="cf-subject" name="subject" type="text" maxlength="160"></div>
+        <div class="field"><label for="cf-service">What is this about? <span class="optional">(optional)</span></label><select id="cf-service" name="service"><option value="">Choose one…</option><option>Penetration testing</option><option>Cybersecurity &amp; IT</option><option>Security installs</option><option>Incident response</option><option>Custom websites &amp; software</option><option>Not sure yet</option></select></div>
+        <div class="field"><label for="cf-pref-date">Preferred date <span class="optional">(optional)</span></label><input id="cf-pref-date" name="pref_date" type="date"></div>
+        <div class="field"><label for="cf-pref-window">Preferred time <span class="optional">(optional)</span></label><select id="cf-pref-window" name="pref_window"><option value="">No preference</option><option>Morning</option><option>Afternoon</option><option>Evening</option></select></div>
         <div class="field field-wide"><label for="cf-message">Message</label><textarea id="cf-message" name="message" rows="5" required maxlength="5000" placeholder="What are you building, what’s breaking, or what keeps you up at night?"></textarea></div>
         <div class="field field-wide"><div class="cf-turnstile" data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"></div></div>
         <div class="form-foot"><button class="btn" type="submit" id="cf-submit">Send message</button><p class="form-status" id="cf-status" role="status" aria-live="polite"></p></div>
@@ -370,6 +374,9 @@ window.setTimeout(function(){
       name:document.getElementById('cf-name').value.trim(),
       email:document.getElementById('cf-email').value.trim(),
       subject:document.getElementById('cf-subject').value.trim(),
+      service:document.getElementById('cf-service').value,
+      pref_date:document.getElementById('cf-pref-date').value,
+      pref_window:document.getElementById('cf-pref-window').value,
       message:document.getElementById('cf-message').value.trim(),
       'cf-turnstile-response':tsToken()
     };
