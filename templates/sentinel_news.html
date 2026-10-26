@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Sentinel News{% endblock %}
+{% block og_title %}Sentinel News — announcements, threat watches, patch alerts{% endblock %}
+{% block og_description %}News from Sentinel Safeguard: company announcements, threat watches, and patch alerts for Kansas City metro businesses and homes, as they are published.{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Sentinel <span class="grn">News</span></h1>
+  <p class="sub">Announcements from the company, threat watches
+  when something is going around, and patch alerts when a fix
+  cannot wait for the weekly roundup. Every item here is posted
+  by Sentinel and dated the day it lands.
+  Follow along by <a href="/sentinel-news/feed.xml">RSS</a> if
+  that is how you read. Longer notes and guides live in
+  <a href="/insights">Insights</a>.</p>
+</section>
+
+<section class="ins-list rv">
+  {% for item in items %}
+  <article class="ins-card">
+    <p class="ins-date"><time datetime="{{ item.date }}">{{ item.date_long }}</time><span class="news-tag">{{ item.tag }}</span></p>
+    <h2><a href="{{ item.url }}">{{ item.title }}</a></h2>
+    <p class="ins-dek">{{ item.summary }}</p>
+    <p><a class="btn-link" href="{{ item.url }}">Read the item &rarr;</a></p>
+  </article>
+  {% else %}
+  <p class="ins-dek">The first stories are on their way.</p>
+  {% endfor %}
+</section>
+
+<section class="about-contact rv">
+  <h2>Talk to Sentinel</h2>
+  <p>Kansas City, Missouri &middot; <a href="tel:+18165338418">816-533-8418</a>
+  &middot; <a href="mailto:Sentinelsafeguard@outlook.com">Sentinelsafeguard@outlook.com</a>
+  &middot; <strong>By appointment only</strong> — call, email, or send
+  a message, and a time is set.</p>
+  <p>
+    <a class="btn-link" href="/contact">Send a message &rarr;</a>
+    &nbsp;&nbsp;
+    <a class="btn-link" href="/report-issue">Report an issue &rarr;</a>
+  </p>
+</section>
+{% endblock %}

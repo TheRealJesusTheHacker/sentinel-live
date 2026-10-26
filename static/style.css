@@ -517,6 +517,18 @@ html.js .rv.in, html.js .rvf.in { opacity: 1; transform: none; }
   border-top: 1px solid var(--line); padding-top: 1em; margin-top: 2.2em;
 }
 
+/* SENTINEL-NEWS-2026-10-26: the news tag chip. Cards and item
+   pages reuse the .ins-* prose system above; the chip is the one
+   new element — a small mono label in the brand green, bordered
+   in the line token, so a tag reads as metadata, never chrome. */
+.news-tag {
+  display: inline-block; font-family: var(--font-mono);
+  font-size: .72em; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--grn); border: 1px solid var(--line);
+  border-radius: var(--r-s); padding: .18em .6em; margin-left: .8em;
+  vertical-align: .18em; white-space: nowrap;
+}
+
 /* GUI polish 2026-10-23: page fade-in, interactive states, spacing rhythm.
    Motion is decorative only — nothing waits on it — and the reduced-motion
    block at the end turns all of it (plus the pre-existing marker pulses)
@@ -701,6 +713,7 @@ section { margin-bottom: 1.5em; }
   .ins-post { max-width: none; }
   .ins-post h1, .ins-body h2, .ins-body h3 { color: #000; }
   .ins-date, .ins-dek, .ins-fine { color: #000; }
+  .news-tag { color: #000; border-color: #000; }
   .ins-body a, .ins-post a { color: #000; text-decoration: underline; }
   h2 { background: none; border-bottom-color: #000; }
 }

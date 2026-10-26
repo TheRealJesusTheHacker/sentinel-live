@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}{{ item.title }}{% endblock %}
+{% block og_title %}{{ item.title }}{% endblock %}
+{% block og_description %}{{ item.summary }}{% endblock %}
+{% block og_type %}article{% endblock %}
+{% block content %}
+<article class="ins-post rv">
+  <p class="ins-date"><time datetime="{{ item.date }}">{{ item.date_long }}</time><span class="news-tag">{{ item.tag }}</span>
+  &middot; Sentinel Safeguard &middot; Sentinel News</p>
+  <h1>{{ item.title }}</h1>
+  <p class="ins-lede">{{ item.summary }}</p>
+  <div class="ins-body">
+{{ item.html | safe }}
+  </div>
+  {% if item.source_name %}
+  <p class="ins-fine">Source: {% if item.source_url %}<a href="{{ item.source_url }}" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
+  {% endif %}
+  <p class="ins-fine">Sentinel News items are short public
+  notices drawn from public reporting and Sentinel's own
+  announcements — general information for businesses and homes
+  in the Kansas City metro, not a promise that any single step
+  fits every system.</p>
+  <p><a class="btn-link" href="/sentinel-news">&larr; All Sentinel News</a></p>
+</article>
+{% endblock %}

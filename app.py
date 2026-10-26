@@ -105,6 +105,16 @@ DEFAULT_CONFIG = {
     # for authentication. New configs must use the hash form only.
     "admin_key": "",
     "admin_key_sha256": "",
+    # SENTINEL-NEWS-2026-10-26: the News Desk push key, stored the
+    # same way as the admin key — ONLY its SHA-256 hex digest in
+    # `news_push_key_sha256`. Sentinel Command presents the key in
+    # the X-News-Key header when it publishes/unpublishes/deletes a
+    # news item at POST /internal/news(-delete); the app hashes the
+    # presented value and constant-time compares digests, so a
+    # config read alone never yields the key. Empty = the push
+    # endpoint is OFF (404 to everything), exactly like a missing
+    # internal token file.
+    "news_push_key_sha256": "",
     # Optional HackProof payments pass-through (default OFF): when enabled,
     # the three public payments routes are proxied to the payments service
     # running on this same machine (see the proxy section below).
@@ -516,7 +526,7 @@ _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/services", "/who-we-protect", "/how-it-works", "/contact",
                          "/insights", "/privacy", "/assessment", "/tools",
                          "/training/phishing", "/faq", "/disclosure",
-                         "/availability"}
+                         "/availability", "/sentinel-news"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -546,7 +556,11 @@ def _visitor_is_public(path: str) -> bool:
     only records 200s, so an unknown slug still logs nothing.)"""
     if path in _VISITOR_PUBLIC_PATHS:
         return True
-    return bool(re.fullmatch(r"/insights/[a-z0-9][a-z0-9-]*", path))
+    if re.fullmatch(r"/insights/[a-z0-9][a-z0-9-]*", path):
+        return True
+    # SENTINEL-NEWS-2026-10-26: published news items log under
+    # their own paths, same as Insights posts.
+    return bool(re.fullmatch(r"/sentinel-news/[a-z0-9][a-z0-9-]*", path))
 
 
 def _chicago_day_start_epoch(days_ago: int = 0) -> int:
@@ -1158,6 +1172,247 @@ def _load_insights():
     return posts
 
 
+# ------------------------------------------------------------------ sentinel news
+# SENTINEL-NEWS-2026-10-26 (owner order 2026-10-26 07:26): Sentinel
+# News — the site's news page, fed from the News Desk in Sentinel
+# Command. Items are DATA, not repo files and not pages: one JSON
+# file per item under data/news/ on the box (SENTINEL_LIVE_NEWS_DIR
+# overrides for tests/rehearsal), written ONLY by the key-gated
+# loopback push endpoint below when the desk publishes. The repo
+# stays a clean pull-only clone; data/news/ rides the nightly
+# backup with the rest of data/. An item carries a state —
+# "draft" or "published" — and ONLY published items render, feed,
+# or sitemap here. Bodies are Markdown in the Insights subset and
+# render through _insight_body_html, so the escaping standard is
+# identical: every line is HTML-escaped first and the only markup
+# emitted is the renderer's own.
+_NEWS_DIR = Path(os.environ.get("SENTINEL_LIVE_NEWS_DIR")
+                 or DATA_DIR / "news")
+_NEWS_TAGS = ("Announcement", "Threat Watch", "Patch Alert",
+              "From the House")
+_NEWS_SLUG_RE = re.compile(r"[a-z0-9][a-z0-9-]*")
+_news_cache = {"key": None, "items": []}
+
+
+def _news_parse_item(raw):
+    """One news file's JSON -> a render dict, or None when the
+    shape is off. Strict on every field the renderer trusts:
+    a sloppy file is skipped (and logged by the caller), never
+    half-rendered."""
+    if not isinstance(raw, dict):
+        return None
+    slug = str(raw.get("slug") or "").strip()
+    if not _NEWS_SLUG_RE.fullmatch(slug) or len(slug) > 80:
+        return None
+    date = str(raw.get("date") or "")
+    try:
+        day = datetime.strptime(date, "%Y-%m-%d").date()
+    except (TypeError, ValueError):
+        return None
+    tag = str(raw.get("tag") or "").strip()
+    if tag not in _NEWS_TAGS:
+        return None
+    title = str(raw.get("title") or "").strip()
+    summary = str(raw.get("summary") or "").strip()
+    body = str(raw.get("body") or "")
+    if not title or not summary:
+        return None
+    source_url = str(raw.get("sourceUrl") or "").strip()
+    if source_url and not source_url.startswith("https://"):
+        source_url = ""
+    return {
+        "slug": slug, "date": date,
+        "date_long": "%s %d, %d" % (day.strftime("%B"), day.day,
+                                    day.year),
+        "tag": tag, "title": title, "summary": summary,
+        "html": _insight_body_html(body),
+        "source_name": str(raw.get("sourceName") or "").strip(),
+        "source_url": source_url,
+        "state": str(raw.get("state") or ""),
+        "updated_at": str(raw.get("updatedAt") or ""),
+        "url": "/sentinel-news/" + slug,
+    }
+
+
+def _load_news():
+    """Every PUBLISHED news item, newest first (same-day items by
+    most recently pushed, then slug). Cached on the directory's
+    (name, mtime) fingerprint, the Insights pattern; a malformed
+    file is logged and skipped — one bad item can never take the
+    page down, and a draft can never leak onto it."""
+    if not _NEWS_DIR.is_dir():
+        return []
+    files = sorted(_NEWS_DIR.glob("*.json"))
+    key = tuple((p.name, p.stat().st_mtime_ns) for p in files)
+    if _news_cache["key"] == key:
+        return _news_cache["items"]
+    items = []
+    for p in files:
+        try:
+            item = _news_parse_item(
+                json.loads(p.read_text(encoding="utf-8")))
+        except Exception:
+            item = None
+        if item is None:
+            log.warning("news: skipping malformed item file %s",
+                        p.name)
+            continue
+        if item["state"] != "published":
+            continue
+        items.append(item)
+    items.sort(key=lambda x: (x["date"], x["updated_at"], x["slug"]),
+               reverse=True)
+    _news_cache["key"] = key
+    _news_cache["items"] = items
+    return items
+
+
+# ------------------------------------------------------- news push gate
+def _news_push_gate(request: Request):
+    """The /internal/news* gate — the ticket-bridge discipline
+    with the key discipline of REMEDIATION 5a: (a) the TCP peer
+    must be loopback, (b) CF-Connecting-IP must be absent (tunnel
+    traffic always carries it; a genuine box-local call never
+    does), (c) the X-News-Key header's SHA-256 must match the
+    digest configured in news_push_key_sha256, constant-time
+    compared. EVERY failure is the same plain 404 whose detail
+    byte-matches the framework's own, so the endpoint cannot be
+    probed apart from a nonexistent path. An unconfigured digest
+    means the feature is OFF — 404 to everything."""
+    def _nope():
+        raise HTTPException(404, "Not Found")
+    host = request.client.host if request.client else ""
+    if host not in ("127.0.0.1", "::1", "localhost"):
+        _nope()
+    if request.headers.get("CF-Connecting-IP") is not None:
+        _nope()
+    expected = str(config.get("news_push_key_sha256") or "").strip().lower()
+    if not expected:
+        _nope()
+    got = request.headers.get("X-News-Key", "")
+    digest = hashlib.sha256(got.encode("utf-8")).hexdigest()
+    if not hmac.compare_digest(digest, expected):
+        _nope()
+
+
+async def _news_push_payload(request: Request):
+    """Body parsed only AFTER the gate (the SWEEP5 rule: a
+    malformed request from outside must meet the same 404 as
+    every other gate failure, never a distinguishing 4xx)."""
+    try:
+        raw = json.loads((await request.body()).decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "A JSON item is required.")
+    if not isinstance(raw, dict):
+        raise HTTPException(400, "A JSON item is required.")
+    slug = str(raw.get("slug") or "").strip()
+    if not _NEWS_SLUG_RE.fullmatch(slug) or len(slug) > 80:
+        raise HTTPException(400, "A valid slug is required.")
+    item = {"slug": slug}
+    if "date" in raw:
+        date = str(raw.get("date") or "")
+        try:
+            datetime.strptime(date, "%Y-%m-%d")
+        except (TypeError, ValueError):
+            raise HTTPException(400, "date must be YYYY-MM-DD.")
+        item["date"] = date
+    # Only keys the caller actually sent ride the item — the
+    # upsert merges over the stored file, and an absent key must
+    # mean "unchanged", never "blanked".
+    for key, cap in (("tag", 40), ("title", 200), ("summary", 400),
+                     ("sourceName", 120), ("sourceUrl", 500)):
+        if key not in raw:
+            continue
+        v = str(raw.get(key) or "").strip()
+        if len(v) > cap:
+            raise HTTPException(400, "%s is too long." % key)
+        item[key] = v
+    if "body" in raw:
+        body = raw.get("body")
+        item["body"] = body if isinstance(body, str) else ""
+        if len(item["body"]) > 60000:
+            raise HTTPException(400, "body is too long.")
+    state = str(raw.get("state") or "").strip()
+    if state not in ("draft", "published"):
+        raise HTTPException(400, "state must be draft or published.")
+    item["state"] = state
+    return item
+
+
+def _news_write_item(item):
+    """Atomic write: temp file in the same directory, then
+    os.replace — a reader mid-publish sees the old file or the
+    new one, never a torn write."""
+    _NEWS_DIR.mkdir(parents=True, exist_ok=True)
+    item = dict(item)
+    item["updatedAt"] = datetime.now(timezone.utc).isoformat(
+        timespec="seconds")
+    target = _NEWS_DIR / (item["slug"] + ".json")
+    tmp = _NEWS_DIR / (item["slug"] + ".json.tmp")
+    tmp.write_text(json.dumps(item, indent=1, sort_keys=True),
+                   encoding="utf-8")
+    os.replace(tmp, target)
+    return item
+
+
+@app.post("/internal/news")
+async def internal_news_upsert(request: Request):
+    # SENTINEL-NEWS-2026-10-26: the News Desk publish path. The
+    # desk calls this when an item is saved, published, or
+    # unpublished; the file it writes IS the item's live state.
+    # Upsert semantics: a save for a slug the directory already
+    # holds keeps the fields the desk did not send (a state-only
+    # publish never wipes a body written by an earlier save).
+    _news_push_gate(request)
+    item = await _news_push_payload(request)
+    existing = None
+    path = _NEWS_DIR / (item["slug"] + ".json")
+    if path.is_file():
+        try:
+            existing = json.loads(path.read_text(encoding="utf-8"))
+        except Exception:
+            existing = None
+    if isinstance(existing, dict):
+        merged = dict(existing)
+        merged.update(item)
+        item = merged
+    # Validation runs on the MERGED item: a state-only push (the
+    # desk's publish/unpublish) sends slug + state, and the fields
+    # it omits are the ones already on file.
+    if "date" not in item:
+        raise HTTPException(400, "date is required.")
+    if item.get("tag") not in _NEWS_TAGS:
+        raise HTTPException(400, "tag is not a Sentinel News tag.")
+    if not item.get("title") or not item.get("summary"):
+        raise HTTPException(400, "title and summary are required.")
+    src = str(item.get("sourceUrl") or "")
+    if src and not src.startswith("https://"):
+        raise HTTPException(400, "sourceUrl must be https.")
+    _news_write_item(item)
+    return {"ok": True, "slug": item["slug"], "state": item["state"]}
+
+
+@app.post("/internal/news-delete")
+async def internal_news_delete(request: Request):
+    # Same gate; removes the item file outright (the desk's
+    # delete). An absent slug is a successful no-op — the desk's
+    # state and the directory converge either way.
+    _news_push_gate(request)
+    try:
+        raw = json.loads((await request.body()).decode("utf-8"))
+    except Exception:
+        raise HTTPException(400, "A JSON body is required.")
+    slug = str((raw or {}).get("slug") or "").strip()
+    if not _NEWS_SLUG_RE.fullmatch(slug) or len(slug) > 80:
+        raise HTTPException(400, "A valid slug is required.")
+    try:
+        (_NEWS_DIR / (slug + ".json")).unlink()
+        deleted = True
+    except FileNotFoundError:
+        deleted = False
+    return {"ok": True, "slug": slug, "deleted": deleted}
+
+
 # ------------------------------------------------------------------ pages
 def _ctx(request: Request, **kw):
     base = {"request": request, "now": _utcnow()}
@@ -1300,6 +1555,69 @@ async def insight_post(request: Request, slug: str):
                 request, "insight_post.html", _ctx(request, post=post))
     # The app's plain 404, same shape as its other 404s — an
     # unknown note is a real 404, never a redirect or a soft 200.
+    raise HTTPException(404, "Not found.")
+
+
+@app.get("/sentinel-news/feed.xml")
+async def sentinel_news_feed(request: Request):
+    # SENTINEL-NEWS-2026-10-26: the Sentinel News RSS feed, built
+    # from the same _load_news() data the pages render (published
+    # items only) — one source, so the feed can never drift from
+    # the page or leak a draft. Registered BEFORE
+    # /sentinel-news/{slug} so "feed.xml" is never read as a slug.
+    from email.utils import format_datetime as _fmt_dt
+    published = _load_news()
+    items = []
+    for item in published:
+        day = datetime.strptime(item["date"], "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        items.append(
+            "<item><title>%s</title><link>%s%s</link>"
+            "<guid isPermaLink=\"true\">%s%s</guid>"
+            "<pubDate>%s</pubDate><category>%s</category>"
+            "<description>%s</description></item>"
+            % (_xml_escape(item["title"]), _SITE_BASE, item["url"],
+               _SITE_BASE, item["url"], _fmt_dt(day),
+               _xml_escape(item["tag"]),
+               _xml_escape(item["summary"])))
+    if published:
+        latest = datetime.strptime(published[0]["date"],
+                                   "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        built = "<lastBuildDate>%s</lastBuildDate>" % _fmt_dt(latest)
+    else:
+        built = ""
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<rss version="2.0"><channel>'
+           "<title>Sentinel Safeguard \u2014 Sentinel News</title>"
+           "<link>%s/sentinel-news</link>"
+           "<description>Announcements, threat watches, and patch "
+           "alerts from Sentinel Safeguard, Kansas City metro."
+           "</description>"
+           "<language>en-us</language>%s%s</channel></rss>"
+           % (_SITE_BASE, built, "".join(items)))
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/sentinel-news", response_class=HTMLResponse)
+async def sentinel_news(request: Request):
+    # SENTINEL-NEWS-2026-10-26: the public news page — published
+    # items from the News Desk, newest first. Drafts never reach
+    # this handler's data (see _load_news), so nothing the desk
+    # has not published can render here.
+    return templates.TemplateResponse(
+        request, "sentinel_news.html", _ctx(request, items=_load_news()))
+
+
+@app.get("/sentinel-news/{slug}", response_class=HTMLResponse)
+async def sentinel_news_item(request: Request, slug: str):
+    for item in _load_news():
+        if item["slug"] == slug:
+            return templates.TemplateResponse(
+                request, "sentinel_news_item.html",
+                _ctx(request, item=item))
+    # A draft's permalink and an unknown slug are the same plain
+    # 404 — the page neither confirms nor denies a draft exists.
     raise HTTPException(404, "Not found.")
 
 
@@ -1503,7 +1821,8 @@ _SITEMAP_PATHS = ["/", "/about", "/services", "/who-we-protect",
                   "/operations", "/threat-map", "/geopolitical",
                   "/flights", "/contact", "/report-issue",
                   "/assessment", "/tools", "/training/phishing",
-                  "/faq", "/disclosure", "/availability"]
+                  "/faq", "/disclosure", "/availability",
+                  "/sentinel-news"]
 
 
 @app.get("/sitemap.xml")
@@ -1517,6 +1836,12 @@ async def sitemap(request: Request):
     for post in _load_insights():
         urls.append("<url><loc>%s%s</loc><lastmod>%s</lastmod></url>"
                     % (_SITE_BASE, post["url"], post["date"]))
+    # SENTINEL-NEWS-2026-10-26: published news items join the
+    # sitemap with their dates; drafts are not public and are
+    # never listed.
+    for item in _load_news():
+        urls.append("<url><loc>%s%s</loc><lastmod>%s</lastmod></url>"
+                    % (_SITE_BASE, item["url"], item["date"]))
     xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/'
            '0.9">%s</urlset>' % "".join(urls))

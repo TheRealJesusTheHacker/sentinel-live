@@ -57,6 +57,10 @@ CANONICAL_FOOTER = [
     ("/who-we-protect", "Who We Protect"),
     ("/how-it-works", "How It Works"),
     ("/insights", "Insights"),
+    # SENTINEL-NEWS-2026-10-26: Sentinel News joins the FOOTER
+    # only, like the sweep's pages — the header band stays the
+    # canonical 14.
+    ("/sentinel-news", "Sentinel News"),
     # ESTATE-2026-10-25: the sweep's new public pages join the
     # FOOTER only — the header band stays at the canonical 14 (its
     # tightening band is load-bearing; see the WWP census pin).
@@ -186,7 +190,7 @@ APP_PAGES = ["/operations", "/threat-map", "/geopolitical", "/flights",
              "/about", "/services", "/who-we-protect", "/how-it-works",
              "/insights", "/insights/patch-day-is-today", "/contact",
              "/privacy", "/assessment", "/tools", "/training/phishing",
-             "/faq", "/disclosure", "/availability"]
+             "/faq", "/disclosure", "/availability", "/sentinel-news"]
 STATIC_PAGES = ["/", "/index.html", "/report-issue", "/ticket"]
 
 
