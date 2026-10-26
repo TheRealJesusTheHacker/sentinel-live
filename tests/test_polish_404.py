@@ -89,7 +89,11 @@ def test_api_and_internal_stay_json_for_browsers(app_mod):
     assert resp.json() == {"detail": "Not Found"}
     resp = client.get("/internal/visitors", headers=BROWSER)
     assert resp.status_code == 404
-    assert resp.json() == {"detail": "Not found."}
+    # SECAUDIT-2026-10-25: the internal gate's 404 now byte-matches
+    # the framework's unmatched-path 404 ("Not Found") — a gated
+    # /internal/* path must be indistinguishable from one that does
+    # not exist. (Public raised 404s keep "Not found." above.)
+    assert resp.json() == {"detail": "Not Found"}
 
 
 def test_gate_403_stays_json_for_browsers(app_mod):
