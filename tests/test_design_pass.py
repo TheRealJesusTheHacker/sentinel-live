@@ -26,9 +26,10 @@ Covers:
     files in insights/ (front matter + a Markdown subset) that the
     index generates from, newest first, and each post renders at
     /insights/<slug>. Pins cover the three seed posts distilled
-    from the 2026-10-25 briefing (dated, defense-only, plain
-    language), the plain-404 for unknown slugs, the educational
-    line on post pages, and the standing accuracy prohibitions.
+    from the 2026-10-25 briefing plus the five owner-approved
+    2026-10-26 posts (dated, defense-only, plain language), the
+    plain-404 for unknown slugs, the educational line on post
+    pages, and the standing accuracy prohibitions.
     Its nav addition (twelve destinations) re-opened the band
     question again — see the updated band pin.
   * /privacy states the site's data handling, traced sentence by
@@ -688,9 +689,19 @@ def test_contact_nav_pill_active_footer_and_visitor_log(app_mod):
 
 
 # ------------------------------------------------------------ insights
-_INSIGHT_SLUGS = ("the-password-on-your-router", "patch-day-is-today",
+_INSIGHT_SLUGS = ("what-this-weeks-breaches-teach",
+                  "ten-questions-answered-honestly",
+                  "spot-the-phish-six-tells",
+                  "passphrases-that-actually-hold",
+                  "backups-you-can-actually-restore",
+                  "the-password-on-your-router", "patch-day-is-today",
                   "backups-you-have-tested")
 _INSIGHT_TITLES = (
+    "What this week's breaches teach a small business",
+    "Ten questions, answered honestly",
+    "Spot the phish: six tells worth learning",
+    "Passphrases that actually hold",
+    "Having backups is not the same as having a restore",
     "The password on your router is a product now",
     "Patch day is today now",
     "A backup you have never restored is a hope, not a backup",
@@ -699,23 +710,28 @@ _INSIGHT_TITLES = (
 
 def test_insights_posts_are_data_newest_first(app_mod):
     # The notebook is a publishing surface: posts load from the
-    # insights/ files, all three seeds dated 2026-10-25, ordered
-    # by the same-day weight the author set (credentials, patch,
-    # backups — the briefing's own order).
+    # insights/ files — the three seeds dated 2026-10-25 plus the
+    # five owner-approved 2026-10-26 posts — ordered newest first
+    # by date, then by the same-day weight the author set.
     posts = app_mod._load_insights()
     assert [p["slug"] for p in posts] == list(_INSIGHT_SLUGS)
-    assert all(p["date"] == "2026-10-25" for p in posts)
-    assert all(p["date_long"] == "October 25, 2026" for p in posts)
+    assert [p["date"] for p in posts] == (
+        ["2026-10-26"] * 5 + ["2026-10-25"] * 3)
+    assert [p["date_long"] for p in posts] == (
+        ["October 26, 2026"] * 5 + ["October 25, 2026"] * 3)
     assert all(p["url"] == "/insights/" + p["slug"] for p in posts)
 
 
 def test_insights_index_renders_dated_cards(app_mod):
     resp = _client(app_mod).get("/insights")
     assert resp.status_code == 200
-    body = _flat(resp.text)
+    # Jinja escapes apostrophes in titles (&#39;); read them back
+    # so the pins below carry the titles as written
+    body = _flat(resp.text).replace("&#39;", "'")
     assert "Insights —" in body
     assert "notes from the daily watch" in body
     assert body.count("October 25, 2026") == 3
+    assert body.count("October 26, 2026") == 5
     for title, slug in zip(_INSIGHT_TITLES, _INSIGHT_SLUGS):
         assert title in body, title
         assert 'href="/insights/%s"' % slug in resp.text, slug
@@ -740,12 +756,46 @@ def test_insights_post_pages_render_from_files(app_mod):
             "One copy the network cannot reach",
             "One restore you have actually done",
             "One calendar entry to do it again"),
+        "what-this-weeks-breaches-teach": (
+            "This week's reporting", "What to do",
+            "Tailworm", "Gheist", "Nextcloud", "ThaiCERT", "Wiz",
+            "patching is not the same as cleaning up"),
+        "ten-questions-answered-honestly": (
+            "What the questions are really asking",
+            "What to do about a weak answer", "The front door.",
+            "ten-minute version"),
+        "spot-the-phish-six-tells": (
+            "The practice round", "The six tells",
+            "The habit that defeats most of them"),
+        "passphrases-that-actually-hold": (
+            "The complexity theater problem", "The math, honestly",
+            "What to do", "1,306", "62 bits", "ten-minute version"),
+        "backups-you-can-actually-restore": (
+            "How we run our own", "The standard, in one line",
+            "SHA-256 fingerprint", "The restore is a drill"),
+    }
+    # the 2026-10-26 batch: each post's date line and first h2
+    new_batch_dates = {s: "October 26, 2026" for s in (
+        "what-this-weeks-breaches-teach", "ten-questions-answered-honestly",
+        "spot-the-phish-six-tells", "passphrases-that-actually-hold",
+        "backups-you-can-actually-restore")}
+    new_batch_h2 = {
+        "what-this-weeks-breaches-teach": "This week's reporting",
+        "ten-questions-answered-honestly":
+            "What the questions are really asking",
+        "spot-the-phish-six-tells": "The practice round",
+        "passphrases-that-actually-hold": "The complexity theater problem",
+        "backups-you-can-actually-restore": "How we run our own",
     }
     for slug, phrases in markers.items():
         resp = client.get("/insights/" + slug)
         assert resp.status_code == 200, slug
-        body = _flat(resp.text)
-        assert "October 25, 2026" in body, slug
+        # the body renderer escapes apostrophes (&#x27;); read them
+        # back so the pins carry the prose as written
+        body = _flat(resp.text).replace("&#x27;", "'").replace(
+            "&#39;", "'")
+        raw = resp.text.replace("&#x27;", "'").replace("&#39;", "'")
+        assert new_batch_dates.get(slug, "October 25, 2026") in body, slug
         for phrase in phrases:
             assert phrase in body, (slug, phrase)
         # the educational line and the way back, on every post
@@ -753,7 +803,8 @@ def test_insights_post_pages_render_from_files(app_mod):
         assert "general guidance" in body, slug
         assert 'href="/insights"' in resp.text, slug
         # the body renderer emitted real structure, not raw text
-        assert "<h2>What happened</h2>" in resp.text, slug
+        assert "<h2>%s</h2>" % new_batch_h2.get(
+            slug, "What happened") in raw, slug
         assert "<strong>" in resp.text, slug
 
 
