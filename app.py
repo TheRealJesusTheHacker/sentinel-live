@@ -12,6 +12,7 @@ All persistent storage is an embedded SQLite file next to the exe.
 Logs go to ./logs/server.log (there is no console in the .exe build).
 """
 import asyncio
+import hashlib
 import hmac
 import csv
 import html
@@ -94,7 +95,16 @@ DEFAULT_CONFIG = {
     # no secret configured, the handlers behave exactly as before.
     "turnstile": {"enabled": False, "secret_key": ""},
     "briefing_token": "",
+    # REMEDIATION 5a (2026-10-26): the admin key is stored ONLY as its
+    # SHA-256 hex digest in `admin_key_sha256` — a config read alone no
+    # longer yields the key. `admin_key` (plaintext) is a DEPRECATED
+    # transition field: it is honored only while no hash is configured,
+    # so a box can deploy this code before its config is migrated, and
+    # tools/hash_admin_key.py converts + removes it. Once a hash is
+    # configured it takes precedence and the plaintext field is ignored
+    # for authentication. New configs must use the hash form only.
     "admin_key": "",
+    "admin_key_sha256": "",
     # Optional HackProof payments pass-through (default OFF): when enabled,
     # the three public payments routes are proxied to the payments service
     # running on this same machine (see the proxy section below).
@@ -322,12 +332,36 @@ def _validate_config_schema():
                         "using default ''",
                         _sec, _key, type(_sub.get(_key)).__name__)
             _sub[_key] = ""
-    for _key in ("briefing_token", "admin_key"):
+    for _key in ("briefing_token", "admin_key", "admin_key_sha256"):
         if not isinstance(config.get(_key), str):
             # Same Sweep #6 rule: these are tokens — type only.
             log.warning("config: %s invalid (type %s); using default ''",
                         _key, type(config.get(_key)).__name__)
             config[_key] = ""
+    # REMEDIATION 5a: the stored admin hash must be exactly one SHA-256
+    # hex digest. Anything else (truncated, tampered with non-hex
+    # characters, a pasted key instead of its hash) fails CLOSED: the
+    # hash is discarded, so no presented key can authenticate against
+    # it. Only the shape is logged, never the value.
+    _ah = config.get("admin_key_sha256") or ""
+    if _ah:
+        if re.fullmatch(r"[0-9a-fA-F]{64}", _ah):
+            config["admin_key_sha256"] = _ah.lower()
+        else:
+            log.warning("config: admin_key_sha256 invalid "
+                        "(not a 64-char hex SHA-256 digest); "
+                        "using default ''")
+            config["admin_key_sha256"] = ""
+    if config.get("admin_key_sha256") and config.get("admin_key"):
+        log.warning("config: both admin_key (plaintext) and "
+                    "admin_key_sha256 are set; the hash takes "
+                    "precedence — remove the plaintext field "
+                    "manually (the migration tool refuses "
+                    "ambiguous configs rather than guess)")
+    elif config.get("admin_key"):
+        log.warning("config: admin_key is stored in plaintext "
+                    "(deprecated); run tools/hash_admin_key.py to "
+                    "migrate this config to admin_key_sha256")
     # BH2-12: CORS lockdown regression guard. Starlette treats the
     # string "*" as a wildcard allowlist (`"*" in allow_origins` is a
     # substring check on a str), so a hand-edited `cors_origins: "*"`
@@ -865,15 +899,30 @@ def require_admin(request: Request):
     if not tunneled and host in ("127.0.0.1", "::1", "localhost"):
         return True
     key = request.headers.get("X-Admin-Key", "")
-    expected = config.get("admin_key") or ""
+    expected_hash = config.get("admin_key_sha256") or ""
+    legacy_key = config.get("admin_key") or ""
     ok = False
-    if expected and key:
-        # SL6-2: compare_digest raises TypeError on non-ASCII str input
-        # (a latin-1-decoded header byte >= 0x80) — that escaped as a
-        # 500. The briefing-token check already guards this; mirror it.
+    if key and (expected_hash or legacy_key):
+        # REMEDIATION 5a: never compare the presented key against a
+        # stored plaintext value. Hash the presented key and compare
+        # HEX DIGESTS with hmac.compare_digest (constant-time). In
+        # hash mode the stored value is already the digest; in the
+        # deprecated transition mode the legacy plaintext is hashed
+        # in memory only, so both paths compare digest-to-digest.
+        # Hashing first also removes the SL6-2 hazard by construction:
+        # a non-ASCII header value encodes and hashes instead of
+        # raising TypeError out of compare_digest — it simply does
+        # not match (same 403 as before, never a 500).
         try:
-            ok = hmac.compare_digest(key, expected)
-        except TypeError:
+            presented = hashlib.sha256(key.encode("utf-8")).hexdigest()
+            if expected_hash:
+                ok = hmac.compare_digest(presented,
+                                         str(expected_hash).lower())
+            else:
+                legacy_digest = hashlib.sha256(
+                    str(legacy_key).encode("utf-8")).hexdigest()
+                ok = hmac.compare_digest(presented, legacy_digest)
+        except (TypeError, UnicodeError):
             ok = False
     if ok:
         return True

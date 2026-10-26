@@ -286,7 +286,8 @@ defaults only.
 | `turnstile.enabled` | `false` | Turn the Cloudflare Turnstile bot check for the three public form endpoints on or off |
 | `turnstile.secret_key` | `""` | Turnstile secret key (server-side only; the matching site key is public in the web pages). With `enabled` on but no secret set, the check stays off and a warning is logged at startup |
 | `briefing_token` | `""` | Shared secret for `POST /api/briefing`, sent as the `X-Briefing-Token` header |
-| `admin_key` | `""` | When set, allows admin access via the `X-Admin-Key` header. See the admin rules under [Security notes](#security-notes) |
+| `admin_key_sha256` | `""` | SHA-256 hex digest of the admin key. When set, allows admin access via the `X-Admin-Key` header carrying the key itself (the key is never stored). See the admin rules under [Security notes](#security-notes) |
+| `admin_key` | `""` | DEPRECATED transition field: the plaintext admin key, honored only while no `admin_key_sha256` is set. Migrate with `python tools/hash_admin_key.py config.yaml` (in place, value never printed, timestamped 600 backup) and restart |
 | `cors_origins` | `[]` | Exact cross-origin allowlist. Empty = no cross-origin access. Never `"*"` — a `"*"` entry is dropped at startup (see Security notes) |
 | `hackproof_payments.enabled` | `false` | Turn the HackProof payments pass-through on or off |
 | `hackproof_payments.upstream` | `"http://127.0.0.1:8787"` | Payments service address. Must be a bare loopback origin; anything else falls back to this default |
@@ -316,13 +317,14 @@ APIs with the configured key:
 
 ```powershell
 Invoke-RestMethod "http://127.0.0.1:8443/api/admin/submissions?type=tickets" `
-  -Headers @{"X-Admin-Key"="<admin_key from config.yaml>"}
+  -Headers @{"X-Admin-Key"="<the admin key itself>"}
 ```
 
 The console and the APIs under `/api/admin/` share one rule (`require_admin`
 in `app.py`): a request is allowed from localhost **only while the tunnel is
-disabled**, or from anywhere with an `X-Admin-Key` header matching
-`admin_key`. Failed attempts are throttled — see Security notes.
+disabled**, or from anywhere with an `X-Admin-Key` header whose SHA-256
+digest matches `admin_key_sha256` in `config.yaml`. Failed attempts are
+throttled — see Security notes.
 
 ### Daily briefing ingest
 
@@ -411,8 +413,16 @@ exactly as the payments service intends.
 * **Admin rules.** The admin page and admin APIs allow a request from
   localhost only while the request shows no sign of having been
   proxied — proxied traffic also arrives as localhost, so the bypass
-  is switched off then — or the `X-Admin-Key` header matching
-  `admin_key` in `config.yaml`, compared in constant time. Failed
+  is switched off then — or the `X-Admin-Key` header whose SHA-256
+  hex digest matches `admin_key_sha256` in `config.yaml`. Only the
+  digest is stored, and digests are compared in constant time
+  (`hmac.compare_digest`), so a config read alone does not yield the
+  key. The old plaintext `admin_key` field is a deprecated transition
+  fallback, honored only while no hash is configured; migrate a live
+  config in place with `tools/hash_admin_key.py` (it never prints the
+  key, keeps mode 600, and leaves a timestamped 600 backup for
+  rollback). A stored hash that is not exactly 64 hex characters
+  fails closed at startup. Failed
   admin attempts are counted per IP, throttled, and logged with the
   real client IP and path.
 * **Rate limits:** the public form endpoints, flight lookups, and the
