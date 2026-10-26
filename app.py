@@ -1345,8 +1345,11 @@ def _news_write_item(item):
     new one, never a torn write."""
     _NEWS_DIR.mkdir(parents=True, exist_ok=True)
     item = dict(item)
+    # Millisecond resolution: the index orders by (date,
+    # updatedAt), and two publishes in the same second must
+    # still order by publish order, not by slug accident.
     item["updatedAt"] = datetime.now(timezone.utc).isoformat(
-        timespec="seconds")
+        timespec="milliseconds")
     target = _NEWS_DIR / (item["slug"] + ".json")
     tmp = _NEWS_DIR / (item["slug"] + ".json.tmp")
     tmp.write_text(json.dumps(item, indent=1, sort_keys=True),
