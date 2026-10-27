@@ -417,6 +417,7 @@ class _BodySizeLimitMiddleware:
         body = b'{"detail":"Request body too large."}'
         await send({"type": "http.response.start", "status": 413,
                     "headers": [(b"content-type", b"application/json"),
+                                (b"cache-control", b"no-store"),
                                 (b"content-length", str(len(body)).encode()),
                                 (b"x-content-type-options", b"nosniff"),
                                 (b"x-frame-options", b"DENY"),
@@ -456,6 +457,16 @@ class _BodySizeLimitMiddleware:
                     hdrs = [(k, v) for k, v in message.get("headers", [])
                             if k.lower() not in _MANAGED_HEADERS]
                     hdrs.extend(_MANAGED_HEADERS.items())
+                    # AUDIT-MAX 2026-10-27 (Lane 1 F3): this app's
+                    # JSON is live data — feeds, admin, errors. No
+                    # downstream cache should retain a JSON body;
+                    # say so explicitly, as mail and Command do.
+                    ctype = next((v for k, v in hdrs
+                                  if k.lower() == b"content-type"), b"")
+                    if ctype.startswith(b"application/json"):
+                        hdrs = [(k, v) for k, v in hdrs
+                                if k.lower() != b"cache-control"]
+                        hdrs.append((b"cache-control", b"no-store"))
                     message = dict(message, headers=hdrs)
                 await _orig_send(message)
 
@@ -1342,6 +1353,21 @@ async def _news_push_payload(request: Request):
     return item
 
 
+def _news_item_path(slug):
+    """The one place a slug becomes a filesystem path. Callers
+    already gate the slug charset ([a-z0-9-], fullmatch, <=80 —
+    no separators, no dots); this adds a containment proof on
+    top: the resolved target must sit directly inside the news
+    store, so no slug, however produced, can address a file
+    outside it. (AUDIT-MAX 2026-10-27, CodeQL py/path-injection
+    alert #3 — defense-in-depth over the charset gate.)"""
+    base = _NEWS_DIR.resolve()
+    target = (base / (slug + ".json")).resolve()
+    if target.parent != base:
+        raise HTTPException(400, "A valid slug is required.")
+    return target
+
+
 def _news_write_item(item):
     """Atomic write: temp file in the same directory, then
     os.replace — a reader mid-publish sees the old file or the
@@ -1353,8 +1379,8 @@ def _news_write_item(item):
     # still order by publish order, not by slug accident.
     item["updatedAt"] = datetime.now(timezone.utc).isoformat(
         timespec="milliseconds")
-    target = _NEWS_DIR / (item["slug"] + ".json")
-    tmp = _NEWS_DIR / (item["slug"] + ".json.tmp")
+    target = _news_item_path(item["slug"])
+    tmp = target.with_name(target.name + ".tmp")
     tmp.write_text(json.dumps(item, indent=1, sort_keys=True),
                    encoding="utf-8")
     os.replace(tmp, target)
@@ -1372,7 +1398,7 @@ async def internal_news_upsert(request: Request):
     _news_push_gate(request)
     item = await _news_push_payload(request)
     existing = None
-    path = _NEWS_DIR / (item["slug"] + ".json")
+    path = _news_item_path(item["slug"])
     if path.is_file():
         try:
             existing = json.loads(path.read_text(encoding="utf-8"))
@@ -1412,7 +1438,7 @@ async def internal_news_delete(request: Request):
     if not _NEWS_SLUG_RE.fullmatch(slug) or len(slug) > 80:
         raise HTTPException(400, "A valid slug is required.")
     try:
-        (_NEWS_DIR / (slug + ".json")).unlink()
+        _news_item_path(slug).unlink()
         deleted = True
     except FileNotFoundError:
         deleted = False
