@@ -101,16 +101,16 @@ def test_security_headers_on_pages_and_apis(gate_app):
     for path in ("/threat-map", "/api/threat-data"):
         h = client.get(path).headers
         assert h["x-frame-options"] == "DENY"
-        # CSP PASS 2026-10-27, stage 1: the full policy ships
-        # Report-Only for the real-browser violation sweep. The
-        # enforcing flip renames this header; the policy text is
-        # pinned exactly either way — no 'unsafe-inline'/'unsafe-eval'
-        # may ever appear in it.
-        assert h["content-security-policy-report-only"] == (
+        # CSP PASS 2026-10-27: stage 1 shipped this policy
+        # Report-Only for the real-browser violation sweep; stage 2
+        # enforces it under this header name. The policy text is
+        # pinned exactly — no 'unsafe-inline'/'unsafe-eval' may
+        # ever appear in it.
+        assert h["content-security-policy"] == (
             "default-src 'none'; "
             "script-src 'self' https://challenges.cloudflare.com; "
             "style-src 'self'; "
-            "img-src 'self' https://server.arcgisonline.com; "
+            "img-src 'self' data: https://server.arcgisonline.com; "
             "font-src 'self'; "
             "connect-src 'self' https://challenges.cloudflare.com; "
             "frame-src https://challenges.cloudflare.com; "

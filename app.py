@@ -445,17 +445,23 @@ class _BodySizeLimitMiddleware:
             # the policy needs no 'unsafe-inline' or 'unsafe-eval'
             # anywhere. The only third parties left are Esri map tiles
             # (img-src) and Cloudflare Turnstile (script/frame/connect
-            # on the form pages). STAGE 1 ships it Report-Only for a
-            # real-browser violation sweep; the enforcing flip is a
-            # separate commit that renames this header.
+            # on the form pages). STAGE 1 shipped it Report-Only
+            # (2026-10-27) and a real-browser sweep exercised every
+            # page type: the only findings were Leaflet's data: empty-
+            # tile placeholder (img-src gains data: — images only,
+            # never scripts) and Cloudflare's edge-injected Web
+            # Analytics beacon, which is deliberately NOT allowlisted
+            # (the privacy page promises no third-party analytics;
+            # the beacon stays blocked). STAGE 2 (this commit) flips
+            # the header to enforcing.
             _MANAGED_HEADERS = {
                 b"x-content-type-options": b"nosniff",
                 b"x-frame-options": b"DENY",
-                b"content-security-policy-report-only":
+                b"content-security-policy":
                     b"default-src 'none'; "
                     b"script-src 'self' https://challenges.cloudflare.com; "
                     b"style-src 'self'; "
-                    b"img-src 'self' https://server.arcgisonline.com; "
+                    b"img-src 'self' data: https://server.arcgisonline.com; "
                     b"font-src 'self'; "
                     b"connect-src 'self' https://challenges.cloudflare.com; "
                     b"frame-src https://challenges.cloudflare.com; "
