@@ -158,14 +158,18 @@ class _FakeResp:
 
 def test_weather_fetch_ok_with_ripe_enrichment(app_mod, monkeypatch):
     feeds = app_mod.feeds
-    # The REAL RIPEstat shape (verified live 2026-10-27): counts
-    # ride the stats entry; timeline points carry only times.
-    ripe_payload = {"data": {"stats": [{"timeline": [
-        {"starttime": "2026-10-20T00:00:00",
-         "endtime": "2026-10-20T00:00:00"},
-        {"starttime": "2026-10-27T00:00:00",
-         "endtime": "2026-10-27T00:00:00"}],
-        "v4_prefixes_ris": 123, "v6_prefixes_ris": 45}]}}
+    # The REAL RIPEstat shape (verified live 2026-10-27): stats is
+    # a time series, oldest first; counts ride the stats entries
+    # (timeline points carry only times); the newest entry rules.
+    ripe_payload = {"data": {"stats": [
+        {"timeline": [{"starttime": "2011-08-15T00:00:00",
+                       "endtime": "2011-08-15T00:00:00"}],
+         "v4_prefixes_ris": 7, "v6_prefixes_ris": 1,
+         "stats_date": "2011-08-20T00:00:00"},
+        {"timeline": [{"starttime": "2026-10-26T00:00:00",
+                       "endtime": "2026-10-26T00:00:00"}],
+         "v4_prefixes_ris": 123, "v6_prefixes_ris": 45,
+         "stats_date": "2026-10-26T00:00:00"}]}}
 
     async def fake_get(client, url, timeout, **kw):
         if "summary" in url:

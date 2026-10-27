@@ -920,7 +920,16 @@ def _ripe_parse(payload):
             return None
         stats = data.get("stats")
         if isinstance(stats, list):
-            stats = stats[0] if stats else {}
+            # NEW-FEATURES-2026-10-27 fix (live-shape verified): the
+            # list is a time series of stat entries, oldest first —
+            # the current counts live on the entry with the greatest
+            # stats_date (the last entry), never on stats[0] (for
+            # South Sudan stats[0] is dated 2011 and reads zero).
+            entries = [s for s in stats if isinstance(s, dict)]
+            stats = {}
+            if entries:
+                stats = max(entries, key=lambda s: str(
+                    s.get("stats_date") or ""))
         if not isinstance(stats, dict):
             return None
         timeline = stats.get("timeline")
