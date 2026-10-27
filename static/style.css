@@ -541,6 +541,22 @@ html.js .rv.in, html.js .rvf.in { opacity: 1; transform: none; }
   vertical-align: .18em; white-space: nowrap;
 }
 
+/* CONVERSION-2026-10-26: the reader-to-booking block
+   (templates/_reader_cta.html) — one quiet panel in the same
+   surface language as .svc-note and .about-contact: the surface
+   gradient, the green-dim edge, the shared radius and shadow.
+   Tokens only, so the palette guard needs no new entries. It
+   closes an article or a Kansas City service landing page;
+   listing pages and feeds never carry it. */
+.reader-cta {
+  background: var(--surf); border: 1px solid var(--grn-dim);
+  border-radius: var(--r-m); padding: 1.2em 1.4em;
+  box-shadow: var(--shadow-1); margin-top: 2.2em; max-width: 68ch;
+}
+.reader-cta h2 { margin: 0 0 .4em; font-size: 1.25em; }
+.reader-cta p { margin: .4em 0; line-height: 1.6; }
+.reader-cta-actions { margin-top: .8em; }
+
 /* GUI polish 2026-10-23: page fade-in, interactive states, spacing rhythm.
    Motion is decorative only — nothing waits on it — and the reduced-motion
    block at the end turns all of it (plus the pre-existing marker pulses)
@@ -726,6 +742,8 @@ section { margin-bottom: 1.5em; }
   .ins-post h1, .ins-body h2, .ins-body h3 { color: #000; }
   .ins-date, .ins-dek, .ins-fine { color: #000; }
   .news-tag { color: #000; border-color: #000; }
+  .reader-cta { border-color: #000; box-shadow: none; }
+  .reader-cta h2 { color: #000; }
   .ins-body a, .ins-post a { color: #000; text-decoration: underline; }
   h2 { background: none; border-bottom-color: #000; }
 }

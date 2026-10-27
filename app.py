@@ -523,7 +523,10 @@ _VISITOR_TABLE_SQL = (
     " visit_id TEXT NOT NULL DEFAULT '', bot INTEGER NOT NULL DEFAULT 0)")
 _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/flights", "/report-issue", "/ticket", "/about",
-                         "/services", "/who-we-protect", "/how-it-works", "/contact",
+                         "/services", "/services/cybersecurity-kansas-city",
+                         "/services/it-support-kansas-city",
+                         "/services/network-security-installs-kansas-city",
+                         "/who-we-protect", "/how-it-works", "/contact",
                          "/insights", "/privacy", "/assessment", "/tools",
                          "/training/phishing", "/faq", "/disclosure",
                          "/availability", "/sentinel-news"}
@@ -1459,6 +1462,33 @@ async def services(request: Request):
     return templates.TemplateResponse(request, "services.html", _ctx(request))
 
 
+@app.get("/services/cybersecurity-kansas-city", response_class=HTMLResponse)
+async def kc_cybersecurity(request: Request):
+    # CONVERSION-2026-10-26: Kansas City service landing pages —
+    # focused doorways into the /services lines of work for local
+    # search intent, one per topic, linked from /services and in
+    # the sitemap. Same factual-only discipline as /services (no
+    # prices, no client history, no invented response times);
+    # Liberty is never named — Kansas City / KC metro only.
+    return templates.TemplateResponse(
+        request, "kc_cybersecurity.html", _ctx(request))
+
+
+@app.get("/services/it-support-kansas-city", response_class=HTMLResponse)
+async def kc_it_support(request: Request):
+    # CONVERSION-2026-10-26: see kc_cybersecurity above.
+    return templates.TemplateResponse(
+        request, "kc_it_support.html", _ctx(request))
+
+
+@app.get("/services/network-security-installs-kansas-city",
+         response_class=HTMLResponse)
+async def kc_network_installs(request: Request):
+    # CONVERSION-2026-10-26: see kc_cybersecurity above.
+    return templates.TemplateResponse(
+        request, "kc_network_installs.html", _ctx(request))
+
+
 @app.get("/who-we-protect", response_class=HTMLResponse)
 async def who_we_protect(request: Request):
     # Who We Protect (owner order 2026-10-25): the named industries
@@ -1819,7 +1849,11 @@ async def availability(request: Request):
 
 # ------------------------------------------------------- insights plumbing
 _SITE_BASE = "https://sentinelsafeguard.net"
-_SITEMAP_PATHS = ["/", "/about", "/services", "/who-we-protect",
+_SITEMAP_PATHS = ["/", "/about", "/services",
+                  "/services/cybersecurity-kansas-city",
+                  "/services/it-support-kansas-city",
+                  "/services/network-security-installs-kansas-city",
+                  "/who-we-protect",
                   "/how-it-works", "/insights", "/privacy",
                   "/operations", "/threat-map", "/geopolitical",
                   "/flights", "/contact", "/report-issue",

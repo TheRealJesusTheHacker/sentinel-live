@@ -12,6 +12,7 @@
   <div class="ins-body">
 {{ item.html | safe }}
   </div>
+  {% include "_reader_cta.html" %}
   {% if item.source_name %}
   <p class="ins-fine">Source: {% if item.source_url %}<a href="{{ item.source_url }}" rel="noopener">{{ item.source_name }}</a>{% else %}{{ item.source_name }}{% endif %}</p>
   {% endif %}
