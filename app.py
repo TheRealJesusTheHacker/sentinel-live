@@ -577,7 +577,9 @@ _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          # New pages 2026-10-27 (owner order).
                          "/kc-scam-alerts", "/internet-weather",
                          # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages.
-                         "/cyber-defcon", "/geopolitical-defcon"}
+                         "/cyber-defcon", "/geopolitical-defcon",
+                         # BREACH-CHECK-2026-10-27: the Breach Check page.
+                         "/breach-check"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -2825,7 +2827,9 @@ _SITEMAP_PATHS = ["/", "/about", "/services",
                   "/faq", "/disclosure", "/availability",
                   "/sentinel-news", "/kc-scam-alerts",
                   # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages.
-                  "/cyber-defcon", "/geopolitical-defcon"]
+                  "/cyber-defcon", "/geopolitical-defcon",
+                  # BREACH-CHECK-2026-10-27: the Breach Check page.
+                  "/breach-check"]
 
 
 @app.get("/sitemap.xml")
@@ -2926,6 +2930,19 @@ async def geopolitical_defcon_page(request: Request):
         request, "geopolitical_defcon.html", _ctx(
             request, geo_pending=_get_geo_pending(),
             geo_changes=_get_geo_changes()))
+
+
+@app.get("/breach-check", response_class=HTMLResponse)
+async def breach_check_page(request: Request):
+    # BREACH-CHECK-2026-10-27 (owner order 2026-10-27): Sentinel's
+    # own public breach-check page — an email breach lookup
+    # (XposedOrNot, proxied by the POST endpoints below) and a
+    # password exposure check (Have I Been Pwned's Pwned Passwords
+    # k-anonymity range API; the hashing happens in the visitor's
+    # browser). The page is Sentinel's own name and branding —
+    # "Breach Check" — never the upstream services' page names.
+    return templates.TemplateResponse(
+        request, "breach_check.html", _ctx(request))
 
 
 @app.get("/geopolitical", response_class=HTMLResponse)
@@ -3505,6 +3522,308 @@ async def api_newsletter(request: Request):
             if "UNIQUE constraint failed" not in str(e):
                 raise
     return {"ok": True}
+
+
+# ------------------------------------------------------------------ breach check
+# BREACH-CHECK-2026-10-27 (owner order 2026-10-27): the two
+# same-origin proxy endpoints behind /breach-check. Both are POST
+# only, so a searched value never rides a URL.
+#
+# Email leg: the address goes to XposedOrNot's keyless check-email
+# API (that IS the lookup — the page discloses it plainly), and the
+# breach names it returns are joined against a cached copy of
+# XposedOrNot's /v1/breaches metadata corpus (refreshed at most
+# every 6 hours) for the card details.
+#
+# Password leg: the visitor's browser SHA-1 hashes the password
+# locally and sends ONLY the first 5 hex characters (the prefix).
+# This endpoint validates that shape, asks Have I Been Pwned's
+# Pwned Passwords range API for that prefix, and returns the
+# suffix:count list — the browser finds its own suffix locally.
+# The full password and the full hash never reach this server.
+#
+# PRIVACY (pinned by tests/test_breach_check_2026_10_27.py):
+# searched emails, passwords, and prefixes are never stored,
+# logged, or written anywhere. In particular the error paths log
+# only the event and the exception's CLASS NAME — an httpx error
+# string can embed the request URL, and the email leg's URL
+# carries the searched address.
+XPOSED_CHECK_EMAIL_URL = "https://api.xposedornot.com/v1/check-email/"
+XPOSED_BREACHES_URL = "https://api.xposedornot.com/v1/breaches"
+PWNED_RANGE_URL = "https://api.pwnedpasswords.com/range/"
+_BREACH_CORPUS_TTL = 6 * 3600  # seconds; metadata corpus refresh cap
+_BREACH_RANGE_TTL = 3600  # range replies are cacheable public data
+_BREACH_RANGE_MAX_BYTES = 256 * 1024  # a range reply is ~30KB
+_BREACH_MAX_NAMES = 200  # defensive cap on cards per lookup
+
+_breach_corpus_cache = {"at": 0.0, "ok": False, "by_name": {}}
+_breach_range_cache = {}
+
+
+def _breach_email_shape(email: str) -> bool:
+    """Server-side email shape check (the browser's type=email is
+    a hint, never the validation): one @, a dotted domain, no
+    whitespace, bounded lengths."""
+    if not email or len(email) > 254:
+        return False
+    return bool(re.fullmatch(
+        r"[^@\s]{1,64}@[^@\s]{1,190}\.[^@\s]{2,}", email))
+
+
+def _breach_check_names(payload):
+    """XposedOrNot check-email payload -> the flat breach-name
+    list, or None when the payload is not the documented shape.
+    A found address returns {"breaches": [[name, ...]], ...}
+    (note the double-nested list); a clean one returns
+    {"Error": "Not found", "email": null}, which parses to []."""
+    if not isinstance(payload, dict):
+        return None
+    if "breaches" not in payload:
+        if "Error" in payload:
+            return []
+        return None
+    raw = payload.get("breaches")
+    if not isinstance(raw, list):
+        return None
+    names = []
+    for item in raw:
+        if isinstance(item, list):
+            names.extend(x for x in item if isinstance(x, str))
+        elif isinstance(item, str):
+            names.append(item)
+    out, seen = [], set()
+    for name in names:
+        name = name.strip()[:120]
+        if name and name not in seen:
+            seen.add(name)
+            out.append(name)
+        if len(out) >= _BREACH_MAX_NAMES:
+            break
+    return out
+
+
+def _breach_corpus_parse(payload):
+    """XposedOrNot /v1/breaches payload -> {breachID: card fields},
+    or None when the payload is not the documented shape. Field
+    names are the corpus's REAL ones (verified live 2026-10-27):
+    breachID, breachedDate, domain, exposedData (a list of data
+    type strings), passwordRisk, exposedRecords,
+    exposureDescription. Only the card fields ride onward."""
+    if not isinstance(payload, dict):
+        return None
+    rows = payload.get("exposedBreaches")
+    if not isinstance(rows, list):
+        return None
+    by_name = {}
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = row.get("breachID")
+        if not isinstance(name, str) or not name.strip():
+            continue
+        exposed = row.get("exposedData")
+        if isinstance(exposed, list):
+            exposed = [str(x).strip()[:80] for x in exposed
+                       if isinstance(x, str) and x.strip()][:40]
+        else:
+            exposed = []
+        date = row.get("breachedDate")
+        date = date.strip()[:10] if isinstance(date, str) else ""
+        domain = row.get("domain")
+        domain = domain.strip()[:120] if isinstance(domain, str) else ""
+        risk = row.get("passwordRisk")
+        risk = risk.strip()[:40] if isinstance(risk, str) else ""
+        records = row.get("exposedRecords")
+        if isinstance(records, bool) or not isinstance(records, int):
+            records = None
+        by_name[name.strip()] = {
+            "name": name.strip(), "date": date, "domain": domain,
+            "exposed_data": exposed, "password_risk": risk,
+            "exposed_records": records}
+    return by_name
+
+
+def _breach_card(name: str, meta):
+    """One result card. meta=None (the breach is missing from the
+    metadata corpus, or the corpus itself is unavailable) is the
+    honest name-only fallback — the card says so via
+    metadata=False and invents no date, domain, or data types."""
+    if not isinstance(meta, dict):
+        return {"name": name, "date": "", "domain": "",
+                "exposed_data": [], "password_risk": "",
+                "exposed_records": None, "metadata": False}
+    card = dict(meta)
+    card["name"] = name
+    card["metadata"] = True
+    return card
+
+
+async def _breach_upstream_check_email(email: str):
+    """One XposedOrNot check-email call; returns the parsed JSON.
+    Isolated as its own seam (like _turnstile_siteverify) so tests
+    stub exactly this function and never touch the network."""
+    async with feeds._make_client(timeout=15.0) as client:
+        resp = await client.get(
+            XPOSED_CHECK_EMAIL_URL + quote(email, safe=""),
+            headers={"User-Agent": "SentinelLive/1.0 "
+                                   "(Sentinel Safeguard LLC)"})
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def _breach_upstream_breaches():
+    """One XposedOrNot /v1/breaches corpus call (see the seam
+    note on _breach_upstream_check_email)."""
+    async with feeds._make_client(timeout=20.0) as client:
+        resp = await client.get(
+            XPOSED_BREACHES_URL,
+            headers={"User-Agent": "SentinelLive/1.0 "
+                                   "(Sentinel Safeguard LLC)"})
+    resp.raise_for_status()
+    return resp.json()
+
+
+async def _breach_upstream_range(prefix: str) -> str:
+    """One Pwned Passwords range call; returns the raw
+    suffix:count text (see the seam note above)."""
+    async with feeds._make_client(timeout=15.0) as client:
+        resp = await client.get(
+            PWNED_RANGE_URL + prefix,
+            headers={"User-Agent": "SentinelLive/1.0 "
+                                   "(Sentinel Safeguard LLC)"})
+    resp.raise_for_status()
+    return resp.text
+
+
+async def _breach_corpus():
+    """The metadata corpus as (by_name, available). A fresh cache
+    is served as-is; past the TTL one refresh is attempted, and a
+    failed refresh falls back to the stale cache. available=False
+    means no corpus at all — cards degrade to name-only."""
+    now = time.time()
+    cache = _breach_corpus_cache
+    if cache.get("ok") and now - float(cache.get("at") or 0) \
+            < _BREACH_CORPUS_TTL:
+        return cache["by_name"], True
+    try:
+        by_name = _breach_corpus_parse(await _breach_upstream_breaches())
+        if by_name is None:
+            raise ValueError("breaches corpus: unexpected shape")
+    except Exception as e:
+        # Class name only — see the PRIVACY note at this section's
+        # head (this call carries no searched value, but the
+        # discipline is uniform).
+        log.warning("breach-check metadata corpus unavailable (%s)",
+                    type(e).__name__)
+        if cache.get("ok"):
+            return cache["by_name"], True
+        return {}, False
+    _breach_corpus_cache.update(
+        {"at": now, "ok": True, "by_name": by_name})
+    return by_name, True
+
+
+def _breach_range_parse(text):
+    """Pwned Passwords range text -> ["SUFFIX:count", ...], or
+    None when nothing in the body parses. Defensive: malformed
+    lines are skipped, suffixes must be 35 uppercase hex chars,
+    counts must be plain integers, and an oversized body is
+    refused outright rather than parsed."""
+    if not isinstance(text, str) or len(text.encode("utf-8", "ignore")) \
+            > _BREACH_RANGE_MAX_BYTES:
+        return None
+    out = []
+    for line in text.splitlines():
+        suffix, sep, count = line.strip().partition(":")
+        if not sep:
+            continue
+        suffix = suffix.strip().upper()
+        count = count.strip()
+        if re.fullmatch(r"[0-9A-F]{35}", suffix) and \
+                re.fullmatch(r"[0-9]+", count):
+            out.append(f"{suffix}:{int(count)}")
+        if len(out) >= 2000:
+            break
+    return out or None
+
+
+# BREACH-CHECK-2026-10-27: the two API routes are POST only, and
+# say so — without these, a GET falls through to the static mount
+# at "/" and answers a plain 404, blurring the contract (a GET
+# also has no business carrying a searched value in its URL).
+@app.get("/api/breach-check/email")
+@app.get("/api/breach-check/password")
+async def api_breach_check_post_only(request: Request):
+    raise HTTPException(405, "Method not allowed — POST only.")
+
+
+@app.post("/api/breach-check/email")
+async def api_breach_check_email(request: Request):
+    rate_limit(request)
+    body = await _json_body(request)
+    await _verify_turnstile(request, body)
+    email = _s(body, "email").strip()
+    if not _breach_email_shape(email):
+        raise HTTPException(400, "Enter a valid email address.")
+    try:
+        payload = await _breach_upstream_check_email(email)
+    except Exception as e:
+        log.warning("breach-check email lookup unavailable (%s)",
+                    type(e).__name__)
+        raise HTTPException(
+            503, "Breach lookup is unavailable right now — please "
+                 "try again later.")
+    names = _breach_check_names(payload)
+    if names is None:
+        log.warning("breach-check email lookup: unexpected "
+                    "upstream shape")
+        raise HTTPException(
+            503, "Breach lookup is unavailable right now — please "
+                 "try again later.")
+    if not names:
+        return {"ok": True, "found": False, "breaches": [],
+                "metadata_available": True}
+    by_name, available = await _breach_corpus()
+    cards = [_breach_card(name, by_name.get(name)) for name in names]
+    return {"ok": True, "found": True, "breaches": cards,
+            "metadata_available": available}
+
+
+@app.post("/api/breach-check/password")
+async def api_breach_check_password(request: Request):
+    # The password leg gets the same rate limit AND the same
+    # Turnstile gate as the email leg (the _verify_turnstile call
+    # is one line — prefix calls are cheap to abuse for dictionary
+    # grinding, so there is no reason to leave this endpoint
+    # ungated where the site has the gate switched on).
+    rate_limit(request)
+    body = await _json_body(request)
+    await _verify_turnstile(request, body)
+    prefix = _s(body, "prefix")
+    if not re.fullmatch(r"[0-9A-F]{5}", prefix or ""):
+        raise HTTPException(
+            400, "Password check needs exactly the first 5 "
+                 "characters of the hash — reload the page and "
+                 "try again.")
+    now = time.time()
+    hit = _breach_range_cache.get(prefix)
+    if hit and now - hit[0] < _BREACH_RANGE_TTL:
+        return {"ok": True, "prefix": prefix, "suffixes": hit[1]}
+    try:
+        suffixes = _breach_range_parse(
+            await _breach_upstream_range(prefix))
+        if suffixes is None:
+            raise ValueError("range reply: unexpected shape")
+    except Exception as e:
+        log.warning("breach-check password lookup unavailable (%s)",
+                    type(e).__name__)
+        raise HTTPException(
+            503, "Password check is unavailable right now — please "
+                 "try again later.")
+    if len(_breach_range_cache) > 512:
+        _breach_range_cache.clear()
+    _breach_range_cache[prefix] = (now, suffixes)
+    return {"ok": True, "prefix": prefix, "suffixes": suffixes}
 
 
 # ------------------------------------------------------------------ briefing ingest

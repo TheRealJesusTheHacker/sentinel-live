@@ -20,7 +20,7 @@
 <link rel="apple-touch-icon" href="/assets/sentinel-safeguard-mark.jpg">
 <link rel="stylesheet" href="/static/fonts.css">
 <script src="/static/js/jsclass.js"></script>
-<link rel="stylesheet" href="/static/style.css?v=20261027-3">
+<link rel="stylesheet" href="/static/style.css?v=20261027-4">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -47,6 +47,7 @@
     <a href="/internet-weather"{% if request.url.path == '/internet-weather' %} class="active" aria-current="page"{% endif %}>Internet Weather</a>
     <a href="/cyber-defcon"{% if request.url.path == '/cyber-defcon' %} class="active" aria-current="page"{% endif %}>Cyber DEFCON</a>
     <a href="/geopolitical-defcon"{% if request.url.path == '/geopolitical-defcon' %} class="active" aria-current="page"{% endif %}>Geopolitical DEFCON</a>
+    <a href="/breach-check"{% if request.url.path == '/breach-check' %} class="active" aria-current="page"{% endif %}>Breach Check</a>
     <a href="https://command.sentinelsafeguard.net/library">Library</a>
     <a href="/report-issue"{% if request.url.path.startswith('/report-issue') %} class="active" aria-current="page"{% endif %}>Report an Issue</a>
     <a class="nav-cta{% if request.url.path == '/contact' %} active{% endif %}" href="/contact"{% if request.url.path == '/contact' %} aria-current="page"{% endif %}>Contact</a>
@@ -78,6 +79,7 @@
     <a href="/internet-weather">Internet Weather</a>
     <a href="/cyber-defcon">Cyber DEFCON</a>
     <a href="/geopolitical-defcon">Geopolitical DEFCON</a>
+    <a href="/breach-check">Breach Check</a>
     <a href="https://command.sentinelsafeguard.net/library">Library</a>
     <a href="/availability">Availability</a>
     <a href="/disclosure">Disclosure</a>

@@ -63,6 +63,10 @@ CANONICAL_NAV = [
     # (was 17).
     ("/cyber-defcon", "Cyber DEFCON"),
     ("/geopolitical-defcon", "Geopolitical DEFCON"),
+    # BREACH-CHECK-2026-10-27 (owner order 2026-10-27): Breach
+    # Check joins the nav immediately after Geopolitical DEFCON;
+    # the canonical set is now 20 (was 19).
+    ("/breach-check", "Breach Check"),
     (LIBRARY, "Library"),
     ("/report-issue", "Report an Issue"),
     ("/contact", "Contact"),
@@ -103,6 +107,9 @@ CANONICAL_FOOTER = [
     # footer after the Internet Weather footer entry.
     ("/cyber-defcon", "Cyber DEFCON"),
     ("/geopolitical-defcon", "Geopolitical DEFCON"),
+    # BREACH-CHECK-2026-10-27: Breach Check joins the footer
+    # after Geopolitical DEFCON, mirroring the header.
+    ("/breach-check", "Breach Check"),
     (LIBRARY, "Library"),
     ("/availability", "Availability"),
     ("/disclosure", "Disclosure"),
@@ -229,7 +236,10 @@ APP_PAGES = ["/operations", "/threat-map", "/geopolitical", "/flights",
              "/kc-scam-alerts", "/internet-weather",
              # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages
              # render the same canonical chrome.
-             "/cyber-defcon", "/geopolitical-defcon"]
+             "/cyber-defcon", "/geopolitical-defcon",
+             # BREACH-CHECK-2026-10-27: the Breach Check page
+             # renders the same canonical chrome.
+             "/breach-check"]
 STATIC_PAGES = ["/", "/index.html", "/report-issue", "/ticket"]
 
 

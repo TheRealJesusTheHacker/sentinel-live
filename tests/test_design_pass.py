@@ -209,7 +209,10 @@ def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     # DEFCON-RESHAPE-2026-10-27: the DEFCON reshape widened the
     # nav band in style.css, so the version query moved to
     # 20261027-3.
-    assert "/static/style.css?v=20261027-3" in resp.text
+    # BREACH-CHECK-2026-10-27: Breach Check widened the nav band
+    # again and added its card styles, so the version query
+    # moved to 20261027-4.
+    assert "/static/style.css?v=20261027-4" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -460,10 +463,16 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # edge. The band now reaches 2620px (+75 over need, in line
     # with the earlier margins), and this pin moved with it
     # again, exactly as designed.
+    # BREACH-CHECK-2026-10-27: Breach Check is the next addition
+    # after that — nineteen destinations: the link adds ~125px
+    # at the nav's metrics, natural need ~2670px, past the
+    # 2620px top edge. The band now reaches 2770px (+100 over
+    # need, in line with the earlier margins), and this pin
+    # moved with it again, exactly as designed.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 2620px) and (min-width: 861px)" in css
+    assert "@media (max-width: 2770px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 2620px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 2770px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 

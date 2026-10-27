@@ -128,7 +128,10 @@ def test_stylesheet_version_query_bumped(app_mod):
     # DEFCON-RESHAPE-2026-10-27: the DEFCON reshape widened the
     # nav band to 2620px for the two DEFCON tabs, so the version
     # query moved to 20261027-3.
-    assert "/static/style.css?v=20261027-3" in resp.text
+    # BREACH-CHECK-2026-10-27: Breach Check widened the nav band
+    # to 2770px for its tab and added its card styles, so the
+    # version query moved to 20261027-4.
+    assert "/static/style.css?v=20261027-4" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

@@ -94,7 +94,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 2620px) and (min-width: 861px) {
+@media (max-width: 2770px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -170,7 +170,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      reaches 2620px (+75 over need, in line with the earlier
      margins); the row at band metrics stays far inside the
      band, and above 2620px the base regime needs only ~2545px
-     — every width is covered with slack. */
+     — every width is covered with slack.
+     BREACH CHECK (2026-10-27): Breach Check made the nav
+     nineteen destinations plus the Contact pill. Estimated
+     the same way (the link adds ~125px at the nav's metrics):
+     nav content ~2354px and the header's natural need ~2670px
+     — past the 2620px top edge, the same lapse shape as every
+     addition before it. The band now reaches 2770px (+100 over
+     need, in line with the earlier margins); the row at band
+     metrics stays far inside the band, and above 2770px the
+     base regime needs only ~2670px — every width is covered
+     with slack. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }
@@ -823,3 +833,28 @@ section { margin-bottom: 1.5em; }
 /* Internet Weather: the bars list carries a signal label after
    the count (the .bars language above does the rest). */
 .bars li em { color: var(--dim); font-style: normal; font-size: .85em; }
+
+/* BREACH-CHECK-2026-10-27: the Breach Check results — a stacked
+   list of breach cards under each form, in the shared panel
+   language (surface gradient, hairline border, shared radius).
+   Built entirely from the existing tokens, so the palette guard
+   needs no new entries. The forms themselves reuse the contact
+   form's panel styles above. */
+.breach-results { display: grid; gap: .8em; margin-top: 1em; }
+.breach-results:empty { margin-top: 0; }
+.breach-card {
+  background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-m); padding: 1em 1.15em;
+}
+.breach-card h3 { margin: 0 0 .3em; color: var(--grn); font-size: 1.02em; }
+.breach-card p { margin: .3em 0; }
+.breach-meta {
+  font-family: var(--font-mono); font-size: .8em;
+  letter-spacing: .04em; color: var(--dim);
+}
+.breach-source {
+  font-family: var(--font-mono); font-size: .74em;
+  letter-spacing: .09em; text-transform: uppercase; color: var(--dim);
+}
+.breach-found { font-weight: 700; color: var(--txt); margin: 0; }
+.breach-clean { color: var(--grn); margin: 0; }

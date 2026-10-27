@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+{% block title %}Breach Check{% endblock %}
+{% block description %}Sentinel Safeguard's Breach Check: see whether an email address appears in known public breaches, and whether a password has shown up in breach data — without Sentinel storing anything you check.{% endblock %}
+{% block og_title %}Breach Check — Sentinel Safeguard{% endblock %}
+{% block og_description %}Check an email address against known public breaches and a password against breach corpora, the privacy-preserving way: Sentinel's Breach Check stores nothing you enter.{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>Breach <span class="grn">Check</span></h1>
+  <p class="sub">Two checks, run the careful way. The first looks up
+  whether an email address appears in known public breaches. The
+  second checks whether a password has shown up in breach data —
+  without the password itself ever leaving your browser. This is
+  Sentinel Safeguard's own page, built on public breach data; it is
+  not the Have I Been Pwned website, though the password check uses
+  that service's Pwned Passwords data in the privacy-preserving way
+  described below.</p>
+  <nav class="svc-jump" aria-label="On this page">
+    <a href="#email-check">Email Breach Lookup</a>
+    <a href="#password-check">Password Exposure Check</a>
+    <a href="#what-to-do">What To Do Now</a>
+    <a href="#how-it-works">How It Works &amp; Privacy</a>
+  </nav>
+</section>
+
+<section class="svc rv" id="email-check">
+  <p class="svc-kicker">Tool one</p>
+  <h2>Email breach lookup</h2>
+  <p class="svc-what">Enter an email address and see which known
+  public breaches it appears in, when they happened, and what kind
+  of data they exposed. Breach data comes from XposedOrNot, a
+  public breach-data project — to run the lookup, the address you
+  enter is sent to XposedOrNot by Sentinel's server. That is stated
+  plainly because it is how the check works; what Sentinel itself
+  keeps is covered below (nothing).</p>
+  <div class="contact-panel">
+    <form class="contact-form" id="bc-email-form">
+      <div class="field field-wide"><label for="bc-email">Email address</label><input id="bc-email" name="email" type="email" autocomplete="email" required maxlength="254" placeholder="you@example.com"></div>
+      <div class="field field-wide"><div class="cf-turnstile" data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"></div></div>
+      <div class="form-foot"><button class="btn-send" type="submit" id="bc-email-submit">Check this address</button><p class="form-status" id="bc-email-status" role="status" aria-live="polite"></p></div>
+      <noscript><p class="form-status">Both checks need JavaScript — the password check's hashing happens in your browser. Email Sentinelsafeguard@outlook.com or call 816-533-8418 instead.</p></noscript>
+    </form>
+    <div class="breach-results" id="bc-email-results" aria-live="polite"></div>
+  </div>
+</section>
+
+<section class="svc rv" id="password-check">
+  <p class="svc-kicker">Tool two</p>
+  <h2>Password exposure check</h2>
+  <p class="svc-what">Type a password and find out whether it has
+  appeared in known breach data, and roughly how many times. The
+  method is called k-anonymity: your browser turns the password
+  into a SHA-1 fingerprint, and only the first 5 characters of
+  that fingerprint are sent to Sentinel's server, which asks Have
+  I Been Pwned's Pwned Passwords service for every fingerprint
+  starting with those 5 characters. Your browser then finds its
+  own fingerprint in that list, on your device.</p>
+  <p class="svc-note"><strong>Your full password and its full hash
+  are never transmitted or stored.</strong> They never leave your
+  browser in any form. The only thing that travels is the 5-character
+  prefix — a fragment shared by thousands of different passwords.</p>
+  <div class="contact-panel">
+    <form class="contact-form" id="bc-password-form">
+      <div class="field field-wide"><label for="bc-password">Password to check</label><input id="bc-password" name="password" type="password" autocomplete="off" spellcheck="false" maxlength="200" placeholder="Type or paste — it is hashed in your browser"></div>
+      <div class="field field-wide"><div class="cf-turnstile" data-theme="dark" data-size="flexible" data-sitekey="0x4AAAAAAFiiv8HgOgu4CceoE"></div></div>
+      <div class="form-foot"><button class="btn-send" type="submit" id="bc-password-submit">Check this password</button><p class="form-status" id="bc-password-status" role="status" aria-live="polite"></p></div>
+    </form>
+    <div class="breach-results" id="bc-password-results" aria-live="polite"></div>
+  </div>
+</section>
+
+<section class="svc rv" id="what-to-do">
+  <p class="svc-kicker">If a check finds something</p>
+  <h2>What to do now</h2>
+  <ul class="assess-list">
+    <li><strong>Change that password everywhere it is reused.</strong>
+    A breached password is tried against other sites automatically —
+    the same password anywhere else is the real danger, not the old
+    breach itself.</li>
+    <li><strong>Turn on multi-factor authentication (MFA)</strong> on
+    the account, and on your email account first of all — whoever
+    holds your email can reset almost everything else.</li>
+    <li><strong>Use a unique password for every account</strong>,
+    kept in a password manager, so one breach can only ever cost
+    you one account.</li>
+    <li><strong>Consider a credit freeze</strong> with the credit
+    bureaus if the breach exposed identity data — a Social Security
+    number, date of birth, or financial account numbers. A freeze is
+    free and blocks new accounts opened in your name.</li>
+    <li><strong>Watch the accounts the breach touched</strong> for
+    password-reset mail and sign-in alerts you did not start.</li>
+  </ul>
+</section>
+
+<section class="svc rv" id="how-it-works">
+  <p class="svc-kicker">Method, sources, and privacy</p>
+  <h2>How it works — and what is sent where</h2>
+  <p class="svc-what"><strong>Email lookups are powered by
+  XposedOrNot.</strong> When you run one, Sentinel's server sends
+  the email address you entered to XposedOrNot's public API, reads
+  back the names of the breaches that address appears in, and joins
+  them against XposedOrNot's breach metadata (breach date, the site
+  involved, and the kinds of data exposed) so the results above can
+  show real detail instead of bare names. Source for both the match
+  and the breach details: XposedOrNot.</p>
+  <p class="svc-what"><strong>Password checks use Have I Been
+  Pwned's Pwned Passwords range service.</strong> Only the first 5
+  characters of your password's SHA-1 fingerprint reach Sentinel's
+  server, and only that prefix is passed on to Pwned Passwords.
+  The answer is a list of fingerprint endings — your browser
+  compares its own ending against the list locally, so the match
+  itself happens on your device.</p>
+  <p class="svc-what"><strong>What Sentinel keeps: nothing.</strong>
+  We never store a searched email address, a password, a full hash,
+  or a hash prefix — not in a database, not in a file, not in a log.
+  The checks run in the moment and are gone when the answer is
+  shown. Like every public page here, this page view itself is
+  counted in the site's visitor log (the page, never what you
+  typed) — see the <a href="/privacy">privacy page</a> for exactly
+  what that log holds. A clean result means the address or password
+  was not found in the data these services hold; it is not a
+  guarantee that it has never been exposed anywhere.</p>
+</section>
+{% include "_reader_cta.html" %}
+{% endblock %}
+{% block scripts %}
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+<script src="/static/js/breach-check.js"></script>
+{% endblock %}
