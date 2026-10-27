@@ -14,7 +14,7 @@
   picture Sentinel watches — 5 ROUTINE at the quiet end, 1 SEVERE
   at the worst. It is computed from three public inputs, and
   nothing else.</p>
-  <p id="cyber-panel-level">{% if cyber_defcon %}DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - cyber_defcon.defcon }}">{{ cyber_defcon.defcon }} &mdash; {{ cyber_defcon.name }}</strong> &middot; score {{ cyber_defcon.score }} of 7 &middot; updated <time datetime="{{ cyber_defcon.computed_at }}">{{ cyber_defcon.computed_at }}</time>{% else %}Being computed &mdash; the first level lands once the feeds have reported in.{% endif %}</p>
+  <p id="cyber-panel-level">{% if cyber_defcon %}DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - cyber_defcon.defcon }}">{{ cyber_defcon.defcon }} &mdash; {{ cyber_defcon.name }}</strong> &middot; score {{ cyber_defcon.score }} of 7 &middot; updated <time datetime="{{ cyber_defcon.computed_at }}">{{ cyber_defcon.computed_at|ct_time }}</time>{% else %}Being computed &mdash; the first level lands once the feeds have reported in.{% endif %}</p>
 </section>
 <section class="tl-panel rv">
   <h2>Score breakdown</h2>

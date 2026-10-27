@@ -73,48 +73,14 @@ CANONICAL_NAV = [
 ]
 
 CANONICAL_FOOTER = [
-    ("/about", "About"),
-    ("/services", "Services"),
-    ("/who-we-protect", "Who We Protect"),
-    ("/how-it-works", "How It Works"),
-    ("/insights", "Insights"),
-    # SENTINEL-NEWS-2026-10-26: Sentinel News joins the FOOTER
-    # only, like the sweep's pages — the header band stays the
-    # canonical 14.
-    # NAV-PROMOTION-2026-10-26: hours later the owner ordered
-    # Sentinel News promoted to its own header tab (CANONICAL_NAV
-    # above is now 15); it stays in the footer too — this footer
-    # set itself is unchanged by the promotion.
-    ("/sentinel-news", "Sentinel News"),
-    # NEW-PAGES-2026-10-27 (owner order 2026-10-27): KC Scam
-    # Alerts joins the footer after Sentinel News; Internet
-    # Weather joins after Operations (the footer's live-views
-    # entry — the footer carries no Flights link to follow).
-    ("/kc-scam-alerts", "KC Scam Alerts"),
-    # ESTATE-2026-10-25: the sweep's new public pages join the
-    # FOOTER only — the header band stays at the canonical 14 (its
-    # tightening band is load-bearing; see the WWP census pin;
-    # the band grew to 15 with the 2026-10-26 nav promotion).
-    ("/assessment", "Assessment"),
-    ("/tools", "Tools"),
-    ("/training/phishing", "Phishing Training"),
-    ("/faq", "FAQ"),
+    # POLISH-LANE-A-2026-10-27 (owner order): the bottom navigation
+    # block is removed from every public page. The slim footer keeps
+    # only the minimal legal links — Privacy and Disclosure (both
+    # legally referenced from in-page copy) — plus the copyright /
+    # entity line and the verified social icons, which are pinned
+    # separately in tests/test_polish_lane_a_2026_10_27.py.
     ("/privacy", "Privacy"),
-    ("/operations", "Operations"),
-    # NEW-PAGES-2026-10-27: see the KC Scam Alerts note above.
-    ("/internet-weather", "Internet Weather"),
-    # DEFCON-RESHAPE-2026-10-27: both DEFCON pages join the
-    # footer after the Internet Weather footer entry.
-    ("/cyber-defcon", "Cyber DEFCON"),
-    ("/geopolitical-defcon", "Geopolitical DEFCON"),
-    # BREACH-CHECK-2026-10-27: Breach Check joins the footer
-    # after Geopolitical DEFCON, mirroring the header.
-    ("/breach-check", "Breach Check"),
-    (LIBRARY, "Library"),
-    ("/availability", "Availability"),
     ("/disclosure", "Disclosure"),
-    ("/report-issue", "Report an Issue"),
-    ("/contact", "Contact"),
 ]
 
 

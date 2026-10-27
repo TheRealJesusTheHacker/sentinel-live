@@ -131,7 +131,9 @@ def test_stylesheet_version_query_bumped(app_mod):
     # BREACH-CHECK-2026-10-27: Breach Check widened the nav band
     # to 2770px for its tab and added its card styles, so the
     # version query moved to 20261027-4.
-    assert "/static/style.css?v=20261027-4" in resp.text
+    # POLISH-LANE-A-2026-10-27: slim footer + social + animation pass
+    # changed style.css, so the version query moved to 20261027-5.
+    assert "/static/style.css?v=20261027-5" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

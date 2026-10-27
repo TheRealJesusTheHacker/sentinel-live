@@ -468,7 +468,7 @@ def test_page_renders_both_tools_and_disclosures(app_mod):
         # wiring: turnstile + the page's own script, nothing inline
         "https://challenges.cloudflare.com/turnstile/v0/api.js",
         "/static/js/breach-check.js",
-        "/static/style.css?v=20261027-4",
+        "/static/style.css?v=20261027-5",
     ):
         assert marker in body, marker
     # one Turnstile widget per form, same public sitekey as /contact

@@ -13,7 +13,7 @@
   level. What follows is a disciplined estimate built only from
   public signals, scored the same way every hour, with every
   move it makes logged in public below.</p>
-  <p id="geo-panel-level">{% if geo_defcon %}Estimated DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - geo_defcon.defcon }}">{{ geo_defcon.defcon }} &mdash; {{ geo_defcon.name }}</strong> &middot; pressure {{ geo_defcon.pressure }} &middot; updated <time datetime="{{ geo_defcon.computed_at }}">{{ geo_defcon.computed_at }}</time>{% else %}Being computed &mdash; the first estimate lands once the geopolitical feed has reported in.{% endif %}</p>
+  <p id="geo-panel-level">{% if geo_defcon %}Estimated DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - geo_defcon.defcon }}">{{ geo_defcon.defcon }} &mdash; {{ geo_defcon.name }}</strong> &middot; pressure {{ geo_defcon.pressure }} &middot; updated <time datetime="{{ geo_defcon.computed_at }}">{{ geo_defcon.computed_at|ct_time }}</time>{% else %}Being computed &mdash; the first estimate lands once the geopolitical feed has reported in.{% endif %}</p>
   {% if geo_pending %}<p class="dim" id="geo-pending">A move to DEFCON {{ geo_pending.defcon }} has been seen {{ geo_pending.count }} time(s) and is awaiting confirmation — the estimate does not move on a single reading.</p>{% endif %}
 </section>
 <section class="tl-panel rv">
@@ -90,7 +90,7 @@
     {% if geo_changes %}
     <ul class="tl-input-list">
       {% for c in geo_changes|reverse %}
-      <li>{{ c.ts }} &middot; DEFCON {{ c.from }} &rarr; <b>{{ c.to }}</b> &middot; pressure {{ c.pressure }} &middot; families A {{ c.families["A"] }}, B {{ c.families["B"] }}, C {{ c.families["C"] }}, D {{ c.families["D"] }}, E {{ c.families["E"] }} &middot; elevated: {{ c.elevated|join(", ") }}</li>
+      <li>{{ c.ts|ct_time }} &middot; DEFCON {{ c.from }} &rarr; <b>{{ c.to }}</b> &middot; pressure {{ c.pressure }} &middot; families A {{ c.families["A"] }}, B {{ c.families["B"] }}, C {{ c.families["C"] }}, D {{ c.families["D"] }}, E {{ c.families["E"] }} &middot; elevated: {{ c.elevated|join(", ") }}</li>
       {% endfor %}
     </ul>
     {% else %}

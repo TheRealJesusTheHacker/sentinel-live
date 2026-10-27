@@ -64,7 +64,7 @@ async function load() {
     const r = await fetch('/api/threat-data');
     const d = await r.json();
     document.getElementById('upd').textContent =
-      'Last updated ' + (d.updated || 'never') +
+      'Last updated ' + fmtCT(d.updated) +
       (d.status === 'ok' ? '' : ' — ' + (d.error || d.status) + ' — retrying automatically.');
     document.getElementById('counters').innerHTML =
       '<div class="counter"><b data-cu="' + (d.attacks_today || 0) + '">0</b><span>attacks logged today</span></div>' +
@@ -133,3 +133,14 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'
 function fmt(n) { return Number(n || 0).toLocaleString('en-US'); }
 load();
 setInterval(load, 60000);
+
+/* POLISH-LANE-A-2026-10-27: house timestamp format — America/Chicago,
+   long date + 12-hour clock + CT, matching the server ct_time filter. */
+function fmtCT(iso) {
+  if (!iso) return 'never';
+  var t = Date.parse(iso);
+  if (isNaN(t)) return String(iso);
+  try {
+    return new Intl.DateTimeFormat('en-US', {timeZone: 'America/Chicago', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true}).format(new Date(t)) + ' CT';
+  } catch (e) { return String(iso); }
+}

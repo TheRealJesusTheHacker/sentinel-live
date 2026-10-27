@@ -193,7 +193,10 @@ def test_about_nav_active_and_header_link_everywhere(app_mod):
         assert page.status_code == 200
         assert 'href="/about"' in page.text, path
         # footer carries the About link too
-        assert page.text.count('href="/about"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/about"') >= 1, path
+        assert 'href="/about"' not in page.text.split("<footer>", 1)[1], path
 
 
 def test_about_counted_in_visitor_log(app_mod):
@@ -212,7 +215,9 @@ def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     # BREACH-CHECK-2026-10-27: Breach Check widened the nav band
     # again and added its card styles, so the version query
     # moved to 20261027-4.
-    assert "/static/style.css?v=20261027-4" in resp.text
+    # POLISH-LANE-A-2026-10-27: slim footer + social + animation pass
+    # changed style.css, so the version query moved to 20261027-5.
+    assert "/static/style.css?v=20261027-5" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -322,7 +327,10 @@ def test_services_nav_active_and_header_link_everywhere(app_mod):
         page = client.get(path)
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
-        assert page.text.count('href="/services"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/services"') >= 1, path
+        assert 'href="/services"' not in page.text.split("<footer>", 1)[1], path
 
 
 def test_about_cards_crosslink_to_services_anchors(app_mod):
@@ -486,7 +494,10 @@ def test_who_we_protect_nav_active_and_header_link_everywhere(app_mod):
         page = client.get(path)
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
-        assert page.text.count('href="/who-we-protect"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/who-we-protect"') >= 1, path
+        assert 'href="/who-we-protect"' not in page.text.split("<footer>", 1)[1], path
 
 
 # -------------------------------------------------------- how it works
@@ -605,7 +616,10 @@ def test_how_it_works_nav_active_and_header_link_everywhere(app_mod):
         page = client.get(path)
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
-        assert page.text.count('href="/how-it-works"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/how-it-works"') >= 1, path
+        assert 'href="/how-it-works"' not in page.text.split("<footer>", 1)[1], path
 
 
 def test_threat_counters_are_countup_targets(app_mod):
@@ -741,7 +755,10 @@ def test_contact_nav_pill_active_footer_and_visitor_log(app_mod):
         assert page.status_code == 200
         assert 'href="/#contact"' not in page.text, path
         # pill + footer at minimum
-        assert page.text.count('href="/contact"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/contact"') >= 1, path
+        assert 'href="/contact"' not in page.text.split("<footer>", 1)[1], path
 
 
 # ------------------------------------------------------------ insights
@@ -922,7 +939,10 @@ def test_insights_nav_active_and_header_link_everywhere(app_mod):
         page = client.get(path)
         assert page.status_code == 200
         # nav link + footer link on every shared-chrome page
-        assert page.text.count('href="/insights"') >= 2, path
+        # POLISH-LANE-A-2026-10-27: bottom nav removed by owner order —
+        # the link lives in the header only; the slim footer must NOT carry it.
+        assert page.text.count('href="/insights"') >= 1, path
+        assert 'href="/insights"' not in page.text.split("<footer>", 1)[1], path
 
 
 # ------------------------------------------------------------ privacy

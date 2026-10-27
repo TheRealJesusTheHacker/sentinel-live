@@ -20,7 +20,7 @@
 <link rel="apple-touch-icon" href="/assets/sentinel-safeguard-mark.jpg">
 <link rel="stylesheet" href="/static/fonts.css">
 <script src="/static/js/jsclass.js"></script>
-<link rel="stylesheet" href="/static/style.css?v=20261027-4">
+<link rel="stylesheet" href="/static/style.css?v=20261027-5">
 {% block head %}{% endblock %}
 </head>
 <body>
@@ -53,40 +53,20 @@
     <a class="nav-cta{% if request.url.path == '/contact' %} active{% endif %}" href="/contact"{% if request.url.path == '/contact' %} aria-current="page"{% endif %}>Contact</a>
   </nav>
 </header>
-<div class="tl-band" id="tl-band">{# DEFCON-RESHAPE-2026-10-27: dual badge band. Chip class is tl-lvl-(6-defcon) — the severity palette is the old rising scale, inverted on purpose. #}Cyber DEFCON {% if cyber_defcon %}<a href="/cyber-defcon"><strong class="tl-lvl tl-lvl-{{ 6 - cyber_defcon.defcon }}">{{ cyber_defcon.defcon }} &mdash; {{ cyber_defcon.name }}</strong></a>{% else %}<a href="/cyber-defcon">being computed</a>{% endif %} &middot; Geopolitical DEFCON (est.) {% if geo_defcon %}<a href="/geopolitical-defcon"><strong class="tl-lvl tl-lvl-{{ 6 - geo_defcon.defcon }}">{{ geo_defcon.defcon }}</strong></a>{% else %}<a href="/geopolitical-defcon">being computed</a>{% endif %}{% if cyber_defcon %} &middot; updated <time datetime="{{ cyber_defcon.computed_at }}">{{ cyber_defcon.computed_at }}</time>{% elif geo_defcon %} &middot; updated <time datetime="{{ geo_defcon.computed_at }}">{{ geo_defcon.computed_at }}</time>{% endif %}</div>
+<div class="tl-band" id="tl-band">{# DEFCON-RESHAPE-2026-10-27: dual badge band. Chip class is tl-lvl-(6-defcon) — the severity palette is the old rising scale, inverted on purpose. #}Cyber DEFCON {% if cyber_defcon %}<a href="/cyber-defcon"><strong class="tl-lvl tl-lvl-{{ 6 - cyber_defcon.defcon }}">{{ cyber_defcon.defcon }} &mdash; {{ cyber_defcon.name }}</strong></a>{% else %}<a href="/cyber-defcon">being computed</a>{% endif %} &middot; Geopolitical DEFCON (est.) {% if geo_defcon %}<a href="/geopolitical-defcon"><strong class="tl-lvl tl-lvl-{{ 6 - geo_defcon.defcon }}">{{ geo_defcon.defcon }}</strong></a>{% else %}<a href="/geopolitical-defcon">being computed</a>{% endif %}{% if cyber_defcon %} &middot; updated <time datetime="{{ cyber_defcon.computed_at }}">{{ cyber_defcon.computed_at|ct_time }}</time>{% elif geo_defcon %} &middot; updated <time datetime="{{ geo_defcon.computed_at }}">{{ geo_defcon.computed_at|ct_time }}</time>{% endif %}</div>
 <main id="main">
 {% block content %}{% endblock %}
 </main>
 <footer>
   <span class="foot-brand">
     <img class="foot-mark" src="/assets/sentinel-safeguard-mark.jpg" alt="" width="42" height="28">
-    <span>Sentinel Safeguard LLC &middot; Kansas City, MO</span>
+    <span>&copy; 2026 Sentinel Safeguard LLC &middot; Kansas City, MO</span>
   </span>
-  <nav class="foot-links" aria-label="Footer">
-    <a href="/about">About</a>
-    <a href="/services">Services</a>
-    <a href="/who-we-protect">Who We Protect</a>
-    <a href="/how-it-works">How It Works</a>
-    <a href="/insights">Insights</a>
-    <a href="/sentinel-news">Sentinel News</a>
-    <a href="/kc-scam-alerts">KC Scam Alerts</a>
-    <a href="/assessment">Assessment</a>
-    <a href="/tools">Tools</a>
-    <a href="/training/phishing">Phishing Training</a>
-    <a href="/faq">FAQ</a>
+  <div class="social-links" aria-label="Sentinel Safeguard on social media"><a class="social-link" href="https://www.facebook.com/profile.php?id=61554735587784" target="_blank" rel="noopener" aria-label="Sentinel Safeguard LLC on Facebook"><svg class="social-icon" aria-hidden="true"><use href="/static/icons/social.svg#icon-facebook"></use></svg></a><a class="social-link" href="https://www.instagram.com/jesusthehacker/" target="_blank" rel="noopener" aria-label="JesusTheHacker on Instagram"><svg class="social-icon" aria-hidden="true"><use href="/static/icons/social.svg#icon-instagram"></use></svg></a><a class="social-link" href="https://github.com/TheRealJesusTheHacker" target="_blank" rel="noopener" aria-label="TheRealJesusTheHacker on GitHub"><svg class="social-icon" aria-hidden="true"><use href="/static/icons/social.svg#icon-github"></use></svg></a></div>
+  <nav class="foot-links" aria-label="Footer legal">
     <a href="/privacy">Privacy</a>
-    <a href="/operations">Operations</a>
-    <a href="/internet-weather">Internet Weather</a>
-    <a href="/cyber-defcon">Cyber DEFCON</a>
-    <a href="/geopolitical-defcon">Geopolitical DEFCON</a>
-    <a href="/breach-check">Breach Check</a>
-    <a href="https://command.sentinelsafeguard.net/library">Library</a>
-    <a href="/availability">Availability</a>
     <a href="/disclosure">Disclosure</a>
-    <a href="/report-issue">Report an Issue</a>
-    <a href="/contact">Contact</a>
   </nav>
-  <span class="dim">Data refreshes automatically &middot; sources: SANS DShield, public RSS</span>
 </footer>
 <script src="/static/js/site.js"></script>
 <script src="/static/js/defcon.js"></script>

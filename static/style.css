@@ -858,3 +858,37 @@ section { margin-bottom: 1.5em; }
 }
 .breach-found { font-weight: 700; color: var(--txt); margin: 0; }
 .breach-clean { color: var(--grn); margin: 0; }
+
+/* POLISH-LANE-A-2026-10-27: slim footer social row, DEFCON chip entry,
+   loading skeletons, and purposeful entry motion. Transform/opacity
+   only; the reduced-motion block at the end collapses all of it. */
+.social-links { display: inline-flex; gap: .5em; align-items: center; }
+.social-link {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 38px; height: 38px; border: 1px solid var(--line); border-radius: 50%;
+  color: var(--dim);
+  transition: color .18s ease, border-color .18s ease, transform .18s var(--ease-out);
+}
+.social-link:hover { color: var(--grn); border-color: var(--grn-dim); transform: translateY(-2px); text-decoration: none; }
+.social-icon { width: 18px; height: 18px; display: block; }
+.tl-band .tl-lvl { animation: chipIn .45s var(--ease-out) both; }
+@keyframes chipIn { from { opacity: 0; transform: scale(.92); } to { opacity: 1; transform: none; } }
+.hero h1 { animation: heroIn .7s var(--ease-out) both; }
+.hero .sub { animation: heroIn .7s var(--ease-out) .08s both; }
+@keyframes heroIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+.leaflet-marker-icon { animation: markerIn .4s var(--ease-out) both; }
+@keyframes markerIn { from { opacity: 0; } to { opacity: 1; } }
+.tick { animation: tickIn .35s var(--ease-out) both; }
+@keyframes tickIn { from { opacity: 0; } to { opacity: 1; } }
+.skl { display: grid; gap: .55em; padding: .4em 0; }
+.skl i {
+  display: block; height: .95em; border-radius: 6px;
+  background: linear-gradient(100deg, var(--panel) 40%, var(--panel2) 50%, var(--panel) 60%);
+  background-size: 200% 100%; animation: sklSweep 1.4s linear infinite;
+}
+.skl i.w60 { width: 60%; } .skl i.w80 { width: 80%; }
+@keyframes sklSweep { from { background-position: 180% 0; } to { background-position: -20% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .tl-band .tl-lvl, .hero h1, .hero .sub, .leaflet-marker-icon, .tick, .skl i { animation: none !important; }
+  .social-link:hover { transform: none; }
+}

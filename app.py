@@ -771,6 +771,29 @@ app.mount("/static", StaticFiles(directory=res_dir("static")), name="static")
 templates = Jinja2Templates(directory=str(res_dir("templates")))
 
 
+# POLISH-LANE-A-2026-10-27: one house date/time format for every
+# server-rendered timestamp — America/Chicago, long date, 12-hour
+# clock, "CT" suffix (same shape as _avail_fmt_ms_time). Raw ISO
+# strings stay in the datetime="" attribute for machines; the
+# visible text is never raw ISO again.
+def _ct_time(value):
+    if not value:
+        return ""
+    try:
+        d = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+        if d.tzinfo is None:
+            d = d.replace(tzinfo=timezone.utc)
+        d = d.astimezone(_CHICAGO_TZ)
+        return "%s %d, %d, %s CT" % (
+            d.strftime("%B"), d.day, d.year,
+            d.strftime("%I:%M %p").lstrip("0"))
+    except Exception:
+        return str(value)
+
+
+templates.env.filters["ct_time"] = _ct_time
+
+
 # Site polish 2026-10-25: a browser that navigates to a missing page
 # gets the site's own themed 404 (in the shared chrome) instead of a
 # bare JSON line. The carve-out is deliberately narrow so no API or

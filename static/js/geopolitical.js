@@ -35,7 +35,7 @@ async function load() {
     const r = await fetch('/api/geo-data');
     const d = await r.json();
     document.getElementById('upd').textContent =
-      'Last updated ' + (d.updated || 'never') + (d.error ? ' — ' + d.error : '');
+      'Last updated ' + fmtCT(d.updated) + (d.error ? ' — ' + d.error : '');
     layers.forEach(l => map.removeLayer(l)); layers = [];
     (d.hotspots || []).forEach(h => {
       // Server groups stories per hotspot (h.stories[], h.count); older
@@ -65,3 +65,14 @@ async function load() {
 function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 load();
 setInterval(load, 120000);
+
+/* POLISH-LANE-A-2026-10-27: house timestamp format — America/Chicago,
+   long date + 12-hour clock + CT, matching the server ct_time filter. */
+function fmtCT(iso) {
+  if (!iso) return 'never';
+  var t = Date.parse(iso);
+  if (isNaN(t)) return String(iso);
+  try {
+    return new Intl.DateTimeFormat('en-US', {timeZone: 'America/Chicago', month: 'long', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit', hour12: true}).format(new Date(t)) + ' CT';
+  } catch (e) { return String(iso); }
+}
