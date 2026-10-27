@@ -932,10 +932,17 @@ def _ripe_parse(payload):
             point = stats
 
         def _pick(*keys):
-            for k in keys:
-                v = _wx_num(point.get(k)) if isinstance(point, dict) else None
-                if v is not None:
-                    return int(v)
+            # NEW-FEATURES-2026-10-27 fix: the REAL payload carries
+            # the counts on the stats entry itself — its timeline
+            # points hold only start/end times. Probe the last
+            # timeline point first, then the stats entry.
+            for src in (point, stats):
+                if not isinstance(src, dict):
+                    continue
+                for k in keys:
+                    v = _wx_num(src.get(k))
+                    if v is not None:
+                        return int(v)
             return None
 
         v4 = _pick("v4_prefixes_ris", "v4_prefixes", "ipv4_prefixes_ris")
