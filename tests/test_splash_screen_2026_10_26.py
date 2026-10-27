@@ -26,6 +26,19 @@ def _home() -> str:
     return HOME.read_text(encoding="utf-8")
 
 
+# CSP pass 2026-10-27: the splash stylesheet and controller moved out
+# of the homepage into same-origin asset files (a strict CSP forbids
+# inline style/script). The pins below read them where they live;
+# the splash markup itself is still pinned in the homepage source.
+def _home_css() -> str:
+    return (SRC / "static" / "site-home.css").read_text(encoding="utf-8")
+
+
+def _home_js() -> str:
+    return (SRC / "static" / "js" / "home-splash.js").read_text(
+        encoding="utf-8")
+
+
 def _splash_block(html: str) -> str:
     start = html.index('id="sentinel-splash"')
     end = html.index('<div class="page">', start)
@@ -96,11 +109,11 @@ def test_splash_precedes_the_page_and_is_hidden_without_javascript():
     html = _home()
     assert html.index('id="sentinel-splash"') < html.index('<div class="page">')
     assert re.search(r'id="sentinel-splash"[^>]*\bhidden\b', html)
-    assert ".sentinel-splash[hidden]{display:none!important}" in html
+    assert ".sentinel-splash[hidden]{display:none!important}" in _home_css()
 
 
 def test_once_per_session_skip_and_fallback_logic_are_present():
-    html = _home()
+    html = _home_js()
     for token in (
         "window.sessionStorage.getItem(storageKey)",
         "window.sessionStorage.setItem(storageKey,'1')",
@@ -118,40 +131,40 @@ def test_once_per_session_skip_and_fallback_logic_are_present():
 
 
 def test_scroll_lock_is_applied_and_removed_by_the_controller():
-    html = _home()
-    assert "html.splash-lock,body.splash-lock{overflow:hidden!important" in html
+    assert "html.splash-lock,body.splash-lock{overflow:hidden!important" in _home_css()
+    html = _home_js()
     assert "root.classList.add('splash-lock')" in html
     assert "root.classList.remove('splash-lock')" in html
     assert "document.documentElement.classList.remove('splash-lock')" in html
 
 
 def test_reduced_motion_gets_a_clean_static_splash():
-    html = _home()
-    reduced = html[html.index("@media(prefers-reduced-motion:reduce){.sentinel-splash"):]
+    css = _home_css()
+    reduced = css[css.index("@media(prefers-reduced-motion:reduce){.sentinel-splash"):]
     assert ".sentinel-splash__slice" in reduced
     assert "display:none!important" in reduced
     assert "animation:none!important" in reduced
-    assert "window.matchMedia('(prefers-reduced-motion: reduce)').matches" in html
+    assert "window.matchMedia('(prefers-reduced-motion: reduce)').matches" in _home_js()
 
 
 def test_animation_sequence_is_layered_and_transform_opacity_only():
-    html = _home()
+    css = _home_css()
     for name in ("splashScan", "splashLogoResolve", "splashSliceOne",
                  "splashSliceTwo", "splashSliceThree", "splashLetterIn",
                  "splashWordGhost", "splashTrace"):
-        assert f"@keyframes {name}" in html, name
-    splash_css = html[html.index("Premium welcome splash"):html.index("</style>")]
+        assert f"@keyframes {name}" in css, name
+    splash_css = css[css.index("Premium welcome splash"):]
     # The glitch layers animate transform/opacity; no width/height/top/
     # left keyframe layout work sneaks into the premium sequence.
-    keyframes = "".join(re.findall(r"@keyframes[^{]+\{(.*?)\}\s*(?=@keyframes|@media|\s*</style>)",
+    keyframes = "".join(re.findall(r"@keyframes[^{]+\{(.*?)\}\s*(?=@keyframes|@media|\s*$)",
                                    splash_css, flags=re.S))
     assert "width:" not in keyframes
     assert "height:" not in keyframes
 
 
 def test_splash_stays_inside_the_black_emerald_white_system():
-    html = _home()
-    splash_css = html[html.index("Premium welcome splash"):html.index("</style>")]
+    css = _home_css()
+    splash_css = css[css.index("Premium welcome splash"):]
     assert "#060806" in splash_css
     assert "#00e676" in splash_css
     assert "#eafff3" in splash_css

@@ -747,3 +747,15 @@ section { margin-bottom: 1.5em; }
   .ins-body a, .ins-post a { color: #000; text-decoration: underline; }
   h2 { background: none; border-bottom-color: #000; }
 }
+
+/* CSP pass 2026-10-27: legend dots and reveal delays that used to be
+   inline style attributes (a strict style-src-attr forbids them). */
+.maplegend .dot-red { background: #ff4444; }
+.maplegend .dot-orange { background: #ff7b33; }
+.maplegend .dot-amber { background: #ffb300; }
+.maplegend .dot-green { background: #00e676; }
+.maplegend .dot-ring { background: #ff4444; border: 2px solid #ff8888; }
+.maplegend .dot-hot { background: #ffb300; border: 2px solid #ffe082; }
+.dly-06 { --d: .06s; }
+.dly-12 { --d: .12s; }
+.dly-18 { --d: .18s; }

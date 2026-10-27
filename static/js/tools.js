@@ -1,0 +1,78 @@
+(function(){
+  var WORDS = ("anchor apple arrow atlas bacon badge bagel baker bamboo banner basket beacon beam bean bear beaver bench berry bicycle blanket blaze blend blossom bolt bonus book boost boot border bottle bottom bounce box branch brave bread breeze brick bridge brief brook broom brush bubble bucket budget buffer bullet bundle burden burger burst bus butter button cabin cable cage cake calm camel camera camp can canal candle canoe canvas canyon capable capital captain car card care carpet carry case castle cat catch cattle cause cedar ceiling cell center century chain chair chalk chance change chaos chapter charge chart chase cheese cherry chest chicken chief child choice church circle city claim class claw clay clean clear cliff climb clinic clock close cloth cloud coach coast coat code coffee coin cold collar collect color column combat comedy comfort comic command comment commerce common company compare compass complete complex compose concert concrete conduct confirm connect consent contact contest context control cook cool copper copy core corn corner correct cost cotton couch count county course cover cow coyote crack craft crane crash crawl crazy cream credit creek crew cricket crime crisis crocodile crop cross crowd crown crude cruise crumble crunch crush cube culture cup cure curiosity current custom cute cycle daily damage dance dare dark dawn day deadline deal dear death debate debt decade decide declare deep deer defense degree delay deliver delta demand demo dense dent deny depart depend deposit depth deputy desert design desk despite detail detect develop device devil diagram dial diamond diary dice diesel diet differ digest digital dime dinner direct dirt dirty discover disease dish dismiss disorder display distance district dive divide doctor dog doll domain dominant door dose double dove down dozen draft dragon drain drama draw dream dress drift drill drink drive drop drum duck dude dune dust duty dynamic eagle early earn earth ease east easy echo edge edit education effort egg eight elbow elder elect electric elegant element elephant eleven elite elm else email embark emerge emotion employ empty enable end enemy energy engine english enhance enjoy enormous enough enter entire entry equal equip error escape estate estimate ethic ethics even evening event every evict exact exam example excess exchange excite excuse exercise exile exist exit expand expect expert explain export expose express extend extra eye fabric face fact factor factory fade fail fair faith fall false family fancy far farm fashion fast fate father fault favor fear feather feature federal feel fellow fence festival fetch fever few fiber fiction field fierce fifteen fifth fight figure file fill film final finance find fine finger finish fire firm first fiscal fish fitness fix flag flame flash flat flavor flee flesh flight float flood floor flour flow fluid flush fly foam focus fog fold folk follow food foot force foreign forest forget fork form formal format former forth fortune forum forward fossil foster found fraction frame free freeze frequent fresh frog frost frown frozen fruit fuel full fun fundamental funny furnace further future gadget gain galaxy gallop gallery game gap garden garlic gas gather gauge gear gem general genre genuine gesture ghost giant gift girl give glad glance glare glass glide glow glue goal goat gold golf good grace grade grain grand grape graph grass grave gravity great green greeting grid grief grin grip grocery ground group grow guard guess guest guide habit hail hair half hall halt hammer hand handle handy hang happy hard hardly harm harvest hat head health heap hear heart heat heavy heel height hell hello helmet help hence herb herd hero hesitate hidden high hike hill hint hip hire history hit hockey hog hold hole holiday hollow holy home honest honor hook hope horizon horn horse host hotel hour house hover huge human humble humor hundred hunt hurry hurt husband icon idea ideal identify idle ignore ill illness image immediate immune impact impart import impose improve impulse inch include income index indicate indoor industry infant inform initial injury inland inlet innocent input insert inside insist inspect inspire install instant instead insult intact intake integer intend intense intent interim internal internet interpret interrupt interval interview intimate invent invest invite involve iron island isolate issue item itself jacket jaguar jaw jazz jeans jewel job join joint joke journal journey judge juice jump jungle junior jury just justice keen keep kettle key kick kidney killer kind kingdom kiss kit kitchen knee knife knock know label labor lack ladder lady lake lamp land lane language lap large laser last late laugh law lawn lawsuit layer lay lead leaf league lean learn leather leave lecture left legal leg legend leisure lemon lend lens less lesson let level linden library license life lift light like limb limit line link lion liquid list listen little live load loan lobby local lock lodge lonely long look loose lose loss lot loud love low loyal luck luggage lumber lunar lunch luxury machine mad magic maid mail main maintain major make male mall manage matter max mayor meal mean meat media meet melon member memory mention menu merchant merit mess metal method middle might mild mile milk mill mind mine minimal minimum minor mint minute miracle mirror miss mode model modern modest modify mole moment monitor month mood moon moral more morning moss most mother motion motor mount mouse mouth move movie much mud multiple muscle museum music must mutual myth nail name narrow nasal nation native natural nature near neck need needle negative neglect neighbor nerve nest net network neutral never news next nice night noble noise none nonsense noon norm north nose notable note nothing notice notion novel now number nurse nut oak object oblige observe obtain obvious occasion occupy occur ocean odd off offer office often oil ok old olive olympic once one onion online only onset open opera opinion oppose option or orange orbit order organ origin other ottoman ounce outcome outer outfit outline output oval oven over owl own owner oxygen pace pack pact page pain pair palace pale palm pan panel panic paper parade parcel parent park parrot part party pass past pat patch path patient patrol pattern pause pavilion paw pay peace peak peanut pear pedal peel pen penalty people pepper percent perch perfect perform perfume perhaps period permit person pet phase phone photo phrase physical piano pick picture pie pig pigeon pile pilot pin pine pink pioneer pipe pit pitch pivot place plain plan plane planet plant plasma plastic plate play player plaza plea pleasant please plot plus poem poet point pole policy polish polite pond pool poor pop popular pore port posh position possible post posture potato pound pour powder power praise praise pray preach precision predict prefer premium prepare present press pressure presuppose presume pretend pretty prevent price pride priest prime prince print prior prison privacy private prize probable problem proceed process produce profile profit program progress project promise prompt prone proof proper property prospect protect proud prove provide psychic public pull pulse pump punch pupil purchase purity purpose pursue push put puzzle qualification qualify quality quan quarter queen question quick quiet quilt quirk quit quiz quote rabbit raccoon race radio rail rain raise rally ramp ranch random range rank rapid rare rat rate rather ratio raw reach react read ready realm rear reason rebel receive recipe record recycle reduce reef reel refer refine reflect reform refuse regal regime region register regular regulate rehab reign reject relish rely remain remark remedy remind remote remove render rent repair repeat replace reply report repose reptile republic request require rescue research reserve resist resolve resort respect respond rest restore result resume retail retain retire return reveal revenge review rhetoric rhythm rice rich ride rifle right rigid rigor rim ring riot ripe rise risk rival river road roar roast robot robust rock rocket romance roof roof rook room root rope rose rosy rotate rough round route row royal rub rude rug rule run rural rush").split(" ").filter(function(w, i, a){ return w && a.indexOf(w) === i; });
+  function randBelow(n){
+    var max = Math.floor(4294967296 / n) * n, x;
+    var buf = new Uint32Array(1);
+    do { window.crypto.getRandomValues(buf); x = buf[0]; } while (x >= max);
+    return x % n;
+  }
+  var out = document.getElementById('pp-out');
+  var bits = document.getElementById('pp-bits');
+  var status = document.getElementById('pp-status');
+  function generate(){
+    var n = parseInt(document.getElementById('pp-words').value, 10);
+    var words = [];
+    for (var i = 0; i < n; i++) words.push(WORDS[randBelow(WORDS.length)]);
+    if (document.getElementById('pp-caps').checked) {
+      var j = randBelow(words.length);
+      words[j] = words[j].charAt(0).toUpperCase() + words[j].slice(1);
+    }
+    var s = words.join("-");
+    if (document.getElementById('pp-number').checked) s += "-" + randBelow(100);
+    if (document.getElementById('pp-symbol').checked) {
+      var syms = "!@#$%^&*?";
+      s += syms.charAt(randBelow(syms.length));
+    }
+    out.textContent = s;
+    bits.textContent = "Drawn from a " + WORDS.length + "-word list: the words alone carry about " +
+      Math.round(n * Math.log2(WORDS.length)) + " bits of guessing resistance, before the options above.";
+    status.textContent = "";
+  }
+  document.getElementById('pp-gen').addEventListener('click', generate);
+  document.getElementById('pp-copy').addEventListener('click', function(){
+    var s = out.textContent;
+    if (!s || s === "Press Generate.") { status.textContent = "Generate one first."; return; }
+    function done(){ status.textContent = "Copied. Put it in your password manager — that is where it should live."; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(s).then(done, function(){ status.textContent = "Copy was blocked by the browser — select the passphrase and copy it by hand."; });
+    } else { status.textContent = "Select the passphrase and copy it by hand."; }
+  });
+  generate();
+
+  var pwIn = document.getElementById('pw-in');
+  var fill = document.getElementById('pw-fill');
+  var verdict = document.getElementById('pw-verdict');
+  var detail = document.getElementById('pw-detail');
+  function check(){
+    var pw = pwIn.value;
+    if (!pw) {
+      fill.style.width = "0%";
+      verdict.textContent = "Nothing typed yet.";
+      detail.textContent = "";
+      return;
+    }
+    var pool = 0;
+    if (/[a-z]/.test(pw)) pool += 26;
+    if (/[A-Z]/.test(pw)) pool += 26;
+    if (/[0-9]/.test(pw)) pool += 10;
+    if (/[^a-zA-Z0-9]/.test(pw)) pool += 33;
+    var entropy = pw.length * Math.log2(pool);
+    var guesses = Math.pow(2, Math.max(0, entropy - 1));
+    var gtxt;
+    if (guesses < 1e6) gtxt = "under a million guesses";
+    else if (guesses < 1e9) gtxt = "about " + Math.round(guesses / 1e6) + " million guesses";
+    else if (guesses < 1e12) gtxt = "about " + Math.round(guesses / 1e9) + " billion guesses";
+    else gtxt = "about 10^" + Math.floor(Math.log10(guesses)) + " guesses (a 1 followed by " + Math.floor(Math.log10(guesses)) + " zeros)";
+    var label;
+    if (entropy < 28) label = "Very weak — a computer works through this almost immediately.";
+    else if (entropy < 50) label = "Weak — fine against a person typing guesses, not against a computer working offline.";
+    else if (entropy < 75) label = "Fair — real resistance, though a determined offline attack still gets there. Longer is better.";
+    else if (entropy < 100) label = "Strong — serious guessing resistance by the best-case math.";
+    else label = "Very strong — by the best-case math, beyond practical guessing.";
+    fill.style.width = Math.min(100, entropy) + "%";
+    verdict.textContent = label;
+    detail.textContent = "Length " + pw.length + " · character pool " + pool + " · about " + Math.round(entropy) +
+      " bits, " + gtxt + " on average in the best case. Real attackers start with passwords from past breaches and common patterns, so a known or reused password falls far sooner than this math suggests.";
+  }
+  pwIn.addEventListener('input', check);
+})();

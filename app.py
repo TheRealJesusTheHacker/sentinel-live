@@ -435,14 +435,37 @@ class _BodySizeLimitMiddleware:
             # site LINKS to the live views), and the owner's OPSEC
             # order supersedes: deny framing, trim the referrer our
             # visitors leak to map/CDN third parties, pin HSTS, and
-            # switch off device APIs no page uses. A full CSP remains a
-            # separate deliberate pass (the map pages compose Leaflet /
-            # Esri / Turnstile at runtime); frame-ancestors below only
-            # stops OTHERS framing our pages and cannot break them.
+            # switch off device APIs no page uses.
+            # CSP PASS 2026-10-27: the full Content-Security-Policy
+            # that BH-2026-10-23 deferred is now designed and staged.
+            # It is only possible because the site was rebuilt for it:
+            # every inline script/style was externalized to same-origin
+            # files, Leaflet 1.9.4 and both typefaces are self-hosted,
+            # and the last style attributes became classes/CSSOM — so
+            # the policy needs no 'unsafe-inline' or 'unsafe-eval'
+            # anywhere. The only third parties left are Esri map tiles
+            # (img-src) and Cloudflare Turnstile (script/frame/connect
+            # on the form pages). STAGE 1 ships it Report-Only for a
+            # real-browser violation sweep; the enforcing flip is a
+            # separate commit that renames this header.
             _MANAGED_HEADERS = {
                 b"x-content-type-options": b"nosniff",
                 b"x-frame-options": b"DENY",
-                b"content-security-policy": b"frame-ancestors 'none'",
+                b"content-security-policy-report-only":
+                    b"default-src 'none'; "
+                    b"script-src 'self' https://challenges.cloudflare.com; "
+                    b"style-src 'self'; "
+                    b"img-src 'self' https://server.arcgisonline.com; "
+                    b"font-src 'self'; "
+                    b"connect-src 'self' https://challenges.cloudflare.com; "
+                    b"frame-src https://challenges.cloudflare.com; "
+                    b"frame-ancestors 'none'; "
+                    b"object-src 'none'; "
+                    b"base-uri 'self'; "
+                    b"form-action 'self'; "
+                    b"worker-src 'self'; "
+                    b"manifest-src 'self'; "
+                    b"media-src 'self'",
                 b"referrer-policy": b"same-origin",
                 b"strict-transport-security":
                     b"max-age=31536000; includeSubDomains",

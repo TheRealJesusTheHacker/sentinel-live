@@ -218,8 +218,12 @@ def test_flights_page_has_live_layer(app_mod):
     resp = _client(app_mod).get("/flights")
     assert resp.status_code == 200
     for marker in ('id="live-status"', 'id="flight-panel"', 'id="fp-close"',
-                   "/api/live-flights", "adsb.lol", "Not for navigation",
-                   "below 10,000 ft", "above 30,000 ft", "emergency squawk",
+                   "adsb.lol", "Not for navigation",
+                   "below 10,000 ft", "above 30,000 ft", "emergency squawk"):
+        assert marker in resp.text, marker
+    # CSP pass 2026-10-27: the live layer is an external script.
+    js = _client(app_mod).get("/static/js/flights-live.js").text
+    for marker in ("/api/live-flights",
                    "setView(KC, 9)", "POLL_MS = 15000",
                    # world-copy discipline (the map runs worldCopyJump):
                    # incoming positions normalize to the copy nearest the
@@ -228,7 +232,7 @@ def test_flights_page_has_live_layer(app_mod):
                    # dead reckoning converts BOTH axes back to degrees
                    # (a radians longitude wraps ~57x around the world).
                    "return [nLa / rad, nLo / rad]"):
-        assert marker in resp.text, marker
+        assert marker in js, marker
 
 
 def test_search_bridge_button_with_result(key_app, monkeypatch):

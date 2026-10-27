@@ -87,7 +87,9 @@ def test_tools_page_states_method_and_privacy(app_mod):
     body = _client(app_mod).get("/tools").text
     flat = _flat(body)
     assert "Nothing leaves your browser" in flat
-    assert "getRandomValues" in body
+    # CSP pass 2026-10-27: the generator script is an external file.
+    assert "getRandomValues" in _client(app_mod).get(
+        "/static/js/tools.js").text
     assert "1,300-word list" in flat
     # strength checker honesty: best-case framing + method stated
     assert "best case" in flat
@@ -96,7 +98,9 @@ def test_tools_page_states_method_and_privacy(app_mod):
 
 # ------------------------------------------------------------ training
 def test_training_items_answers_and_inert_samples(app_mod):
-    body = _client(app_mod).get("/training/phishing").text
+    page = _client(app_mod).get("/training/phishing").text
+    # CSP pass 2026-10-27: the item bank lives in the external script.
+    body = page + _client(app_mod).get("/static/js/training.js").text
     assert body.count('"phish"') >= 1 and body.count('"legit"') >= 1
     assert "training sample, not a real message" in body
     # six samples, mixed answers, explanations keyed to tells

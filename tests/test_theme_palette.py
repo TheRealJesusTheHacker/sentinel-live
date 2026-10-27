@@ -53,6 +53,11 @@ RGB_RE = re.compile(r"rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)")
 
 def _surface_files():
     files = [SRC / "static/style.css"]
+    # CSP pass 2026-10-27: the static pages' stylesheets were
+    # extracted into these two first-party files — they stay under
+    # the palette guard. (static/fonts.css and the vendored Leaflet
+    # stylesheet are generated/vendor files, not house surfaces.)
+    files += [SRC / "static/site-home.css", SRC / "static/site-forms.css"]
     files += sorted((SRC / "site").rglob("*.html"))
     files += sorted((SRC / "templates").glob("*.html"))
     return files
@@ -72,13 +77,24 @@ def test_no_unlisted_colors_anywhere():
     assert not offenders, "unlisted colors (add deliberately or fix):\n" + "\n".join(offenders)
 
 
+def _page_with_css(path):
+    """A static page plus the first-party stylesheet it links (CSP
+    pass 2026-10-27 extracted the pages' <style> blocks into
+    static/site-*.css; the design tokens live there now)."""
+    text = path.read_text(encoding="utf-8")
+    m = re.search(r'href="/static/(site-[a-z]+\.css)"', text)
+    if m:
+        text += (SRC / "static" / m.group(1)).read_text(encoding="utf-8")
+    return text
+
+
 def test_static_pages_are_dark_only_on_the_named_base():
     for path in sorted((SRC / "site").rglob("*.html")):
         text = path.read_text(encoding="utf-8")
         assert 'content="dark"' in text, path
         assert "prefers-color-scheme: light" not in text, path
         assert "#f2f4f1" not in text, path  # the old light scheme's base
-        assert "--bg:#060806" in text, path
+        assert "--bg:#060806" in _page_with_css(path), path
 
 
 def test_app_base_token_and_theme_color_are_the_named_base():
@@ -90,12 +106,19 @@ def test_app_base_token_and_theme_color_are_the_named_base():
 
 
 def test_typography_loading_is_one_system():
-    url = ("family=Archivo:wdth,wght@90..110,400..800"
-           "&family=IBM+Plex+Mono:wght@400;500;600")
+    # CSP pass 2026-10-27: typography is self-hosted — every surface
+    # loads the same first-party fonts.css and no Google Fonts URL
+    # remains anywhere in the page sources.
     base = (SRC / "templates/base.html").read_text(encoding="utf-8")
-    assert url in base
+    assert 'href="/static/fonts.css"' in base
+    assert "fonts.googleapis.com" not in base
     for path in sorted((SRC / "site").rglob("*.html")):
-        assert url in path.read_text(encoding="utf-8"), path
+        text = path.read_text(encoding="utf-8")
+        assert 'href="/static/fonts.css"' in text, path
+        assert "fonts.googleapis.com" not in text, path
+    css = (SRC / "static" / "fonts.css").read_text(encoding="utf-8")
+    assert "font-family: 'Archivo'" in css
+    assert "font-family: 'IBM Plex Mono'" in css
 
 
 def test_radius_tokens_match_across_systems():
@@ -103,6 +126,6 @@ def test_radius_tokens_match_across_systems():
     for token in ("--r-s: 8px", "--r-m: 12px", "--r-l: 16px"):
         assert token in css
     for path in sorted((SRC / "site").rglob("*.html")):
-        text = path.read_text(encoding="utf-8")
+        text = _page_with_css(path)
         for token in ("--radius-s:8px", "--radius-m:12px", "--radius-l:16px"):
             assert token in text, (path, token)

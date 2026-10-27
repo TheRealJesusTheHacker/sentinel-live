@@ -11,17 +11,17 @@
     <p>Malicious infrastructure observed in the wild, mapped live.</p>
     <span class="stat">{{ '{:,}'.format(threat.attacks_today or 0) }} attacks today &middot; {{ threat.status }}</span>
   </a>
-  <a class="card rv" style="--d:.06s" href="/geopolitical">
+  <a class="card rv dly-06" href="/geopolitical">
     <h3>Geopolitical Feed</h3>
     <p>World events with hotspot mapping and impact notes.</p>
     <span class="stat">{{ geo["items"]|length if geo else 0 }} stories &middot; {{ geo.status if geo else "" }}</span>
   </a>
-  <a class="card rv" style="--d:.12s" href="/flights">
+  <a class="card rv dly-12" href="/flights">
     <h3>Flight Tracker</h3>
     <p>Live flight status by flight number.</p>
     <span class="stat">Search any commercial flight</span>
   </a>
-  <a class="card rv" style="--d:.18s" href="/news">
+  <a class="card rv dly-18" href="/news">
     <h3>News Hub</h3>
     <p>Daily briefing: national, Missouri, KC, cyber, markets.</p>
     <span class="stat">{{ news.status if news else "" }}</span>
@@ -58,40 +58,5 @@
 </section>
 {% endblock %}
 {% block scripts %}
-<script>
-// Phase Two A (2026-10-25): the operations landing now SAYS what is
-// live instead of only linking to it — top threat sources and the
-// latest geopolitical headlines, from the same public read APIs the
-// tracker pages use. The flight card spends no provider quota: it is
-// the tracker search itself, carried to the full page on submit.
-function pvEsc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-function pvFmt(n) { return Number(n || 0).toLocaleString('en-US'); }
-async function pvLoad() {
-  try {
-    const d = await (await fetch('/api/threat-data')).json();
-    document.getElementById('pv-threat-stat').textContent =
-      pvFmt(d.attacks_today) + ' attacks today · ' + pvFmt(d.sources_today) + ' sources';
-    document.getElementById('pv-threat-list').innerHTML =
-      (d.countries || []).slice(0, 3).map(c =>
-        '<li><span>' + pvEsc(c.code) + '</span><b>' + pvFmt(c.count) + ' attacks</b></li>').join('')
-      || '<li class="dim">No data yet — retrying automatically.</li>';
-  } catch (e) {
-    document.getElementById('pv-threat-stat').textContent = 'Live data unreachable — retrying.';
-  }
-  try {
-    const g = await (await fetch('/api/geo-data')).json();
-    document.getElementById('pv-geo-stat').textContent =
-      (g.items || []).length + ' stories · ' + (g.hotspots || []).length + ' hotspots mapped';
-    document.getElementById('pv-geo-list').innerHTML =
-      (g.items || []).slice(0, 3).map(s =>
-        '<li>' + (s.link ? '<a href="' + pvEsc(s.link) + '" target="_blank" rel="noopener">' : '') +
-        pvEsc(s.title) + (s.link ? '</a>' : '') + '</li>').join('')
-      || '<li class="dim">No stories right now.</li>';
-  } catch (e) {
-    document.getElementById('pv-geo-stat').textContent = 'Live data unreachable — retrying.';
-  }
-}
-pvLoad();
-setInterval(pvLoad, 60000);
-</script>
+<script src="/static/js/ops.js"></script>
 {% endblock %}

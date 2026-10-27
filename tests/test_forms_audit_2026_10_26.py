@@ -94,13 +94,15 @@ def test_homepage_contact_form_matches_contact_page_form(app_mod):
 
 
 def test_homepage_contact_payload_sends_booking_fields():
-    home = (SRC / "site" / "index.html").read_text(encoding="utf-8")
+    # CSP pass 2026-10-27: the homepage handler is an external file.
+    home = (SRC / "static" / "js" / "home.js").read_text(encoding="utf-8")
     for token in ("service:document.getElementById('cf-service').value",
                   "pref_date:document.getElementById('cf-pref-date').value",
                   "pref_window:document.getElementById('cf-pref-window').value",
                   "fetch('/api/contact'"):
         assert token in home, token
-    assert ".contact-form select" in home  # selects are styled, not bare
+    css = (SRC / "static" / "site-home.css").read_text(encoding="utf-8")
+    assert ".contact-form select" in css  # selects are styled, not bare
 
 
 # ------------------------------------------------------------- ticket funnel
@@ -112,25 +114,33 @@ def test_ticket_funnels_are_one_form_with_every_field():
     fields = _field_ids(a, "ticket-form")
     assert {"tf-name", "tf-email", "tf-phone", "tf-category",
             "tf-priority", "tf-subject", "tf-message"} <= fields
+    # CSP pass 2026-10-27: the shared ticket handler is external.
+    js = (SRC / "static" / "js" / "static-forms.js").read_text(
+        encoding="utf-8")
     for token in ("phone:document.getElementById('tf-phone').value",
                   "category:document.getElementById('tf-category').value",
                   "priority:document.getElementById('tf-priority').value",
                   "fetch('/api/ticket'",
                   "r.data.ticket_id"):
-        assert token in a, token
+        assert token in js, token
 
 
 # ------------------------------------------------------------- local-only
 @pytest.mark.parametrize("tpl", ("assessment.html", "tools.html",
                                  "training_phishing.html"))
 def test_local_only_pages_make_no_network_calls(tpl):
+    # CSP pass 2026-10-27: the logic lives in the pages' external
+    # scripts now — the no-network rule is pinned where the code is.
+    js = {"assessment.html": "assessment.js", "tools.html": "tools.js",
+          "training_phishing.html": "training.js"}[tpl]
     text = (SRC / "templates" / tpl).read_text(encoding="utf-8")
+    text += (SRC / "static" / "js" / js).read_text(encoding="utf-8")
     for bad in ("fetch(", "XMLHttpRequest", "sendBeacon", "/api/"):
         assert bad not in text, (tpl, bad)
 
 
 def test_assessment_submit_is_a_local_score_only():
-    text = (SRC / "templates" / "assessment.html").read_text(
+    text = (SRC / "static" / "js" / "assessment.js").read_text(
         encoding="utf-8")
     handler = text[text.index("form.addEventListener('submit'"):]
     assert "ev.preventDefault()" in handler
@@ -141,11 +151,15 @@ def test_tools_and_training_buttons_cannot_submit_a_form():
     tools = (SRC / "templates" / "tools.html").read_text(encoding="utf-8")
     assert "<form" not in tools
     assert tools.count('type="button"') >= 2  # generate + copy
-    assert "pwIn.addEventListener('input'" in tools  # checker is live-input
+    tools_js = (SRC / "static" / "js" / "tools.js").read_text(
+        encoding="utf-8")
+    assert "pwIn.addEventListener('input'" in tools_js  # checker is live-input
     phish = (SRC / "templates" / "training_phishing.html").read_text(
         encoding="utf-8")
     assert "<form" not in phish
-    assert "bL.type = 'button'" in phish and "bP.type = 'button'" in phish
+    phish_js = (SRC / "static" / "js" / "training.js").read_text(
+        encoding="utf-8")
+    assert "bL.type = 'button'" in phish_js and "bP.type = 'button'" in phish_js
 
 
 # ------------------------------------------------------------- search/data
@@ -160,9 +174,10 @@ def test_flight_search_forms_all_get_flights_with_q():
 
 
 def test_data_pages_fetch_only_their_own_data():
-    threat = (SRC / "templates" / "threat_map.html").read_text(
+    # CSP pass 2026-10-27: the fetch logic is in the external scripts.
+    threat = (SRC / "static" / "js" / "threat-map.js").read_text(
         encoding="utf-8")
-    geo = (SRC / "templates" / "geopolitical.html").read_text(
+    geo = (SRC / "static" / "js" / "geopolitical.js").read_text(
         encoding="utf-8")
     assert "fetch('/api/threat-data')" in threat
     assert "fetch('/api/geo-data')" in geo

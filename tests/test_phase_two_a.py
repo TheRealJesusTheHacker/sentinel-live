@@ -85,10 +85,14 @@ def test_operations_has_three_live_preview_panels(app_mod):
 
 def test_operations_preview_script_uses_public_apis_only(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "fetch('/api/threat-data')" in resp.text
-    assert "fetch('/api/geo-data')" in resp.text
-    assert "setInterval(pvLoad, 60000)" in resp.text
+    assert resp.status_code == 200
+    # CSP pass 2026-10-27: the preview script is an external file.
+    js = _client(app_mod).get("/static/js/ops.js").text
+    assert "fetch('/api/threat-data')" in js
+    assert "fetch('/api/geo-data')" in js
+    assert "setInterval(pvLoad, 60000)" in js
     # the landing never calls a flight-lookup surface (quota guard)
+    assert "/api/flight" not in js
     assert "/api/flight" not in resp.text
 
 
@@ -116,8 +120,9 @@ def test_stylesheet_version_query_bumped(app_mod):
     # -9 is the Privacy page's nav-band widening (1900px).
     # 20261026-1 was the Sentinel News page build; 20261026-2 is
     # the Sentinel News nav promotion (2026-10-26) — the header
-    # band widening to 2040px for its own tab.
-    assert "/static/style.css?v=20261026-2" in resp.text
+    # band widening to 2040px for its own tab. 20261027-1 is the
+    # CSP pass (legend dots + reveal delays became classes).
+    assert "/static/style.css?v=20261027-1" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):
@@ -144,7 +149,10 @@ def test_flights_legend_and_note_above_map(app_mod):
 
 def test_flights_live_popup_opens_by_default(app_mod):
     resp = _client(app_mod).get("/flights")
-    assert ".addTo(fmap).openPopup()" in resp.text
+    assert resp.status_code == 200
+    # CSP pass 2026-10-27: the route plotter is an external script.
+    js = _client(app_mod).get("/static/js/flights-map.js").text
+    assert ".addTo(fmap).openPopup()" in js
 
 
 # ---------------------------------------------------------- invariants

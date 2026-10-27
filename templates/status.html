@@ -10,7 +10,7 @@
   </div>
   <div class="stat-card">
     <div class="stat-label">Uptime</div>
-    <div class="stat-value" id="uptime">{{ uptime }}s</div>
+    <div class="stat-value" id="uptime" data-t0="{{ uptime }}">{{ uptime }}s</div>
     <div class="stat-sub">since last start</div>
   </div>
 </div>
@@ -28,14 +28,5 @@
 <p class="dim">Ping endpoint for machines: <code>/health</code> (JSON)</p>
 {% endblock %}
 {% block scripts %}
-<script>
-const t0 = {{ uptime }};
-const el = document.getElementById('uptime');
-const start = Date.now();
-setInterval(() => {
-  const s = t0 + Math.floor((Date.now() - start) / 1000);
-  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
-  el.textContent = (h ? h + 'h ' : '') + (m ? m + 'm ' : '') + (s % 60) + 's';
-}, 1000);
-</script>
+<script src="/static/js/status.js"></script>
 {% endblock %}

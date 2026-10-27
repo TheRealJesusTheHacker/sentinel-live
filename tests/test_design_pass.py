@@ -38,7 +38,8 @@ Covers:
     storage, the visitor log (IP, user agent, path, referrer,
     Cloudflare country, bot flag) and its 90-day prune, the one
     first-party cookie (svid), the named third parties
-    (Cloudflare, Google Fonts, Esri, unpkg), and the never list.
+    (Cloudflare, Esri — fonts and the Leaflet library self-hosted
+    since the 2026-10-27 CSP pass), and the never list.
     Pins assert the honest disclosures EXIST and that the page
     never claims "we collect nothing", "no cookies", or an
     unqualified "anonymous" — the site collects, and the page
@@ -202,7 +203,7 @@ def test_about_counted_in_visitor_log(app_mod):
 # ------------------------------------------------------ design system
 def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     resp = _client(app_mod).get("/operations")
-    assert "/static/style.css?v=20261026-2" in resp.text
+    assert "/static/style.css?v=20261027-1" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -224,8 +225,15 @@ def test_base_template_favicon_is_emblem_and_fonts_loaded(app_mod):
     resp = _client(app_mod).get("/operations")
     assert 'rel="icon" type="image/jpeg" href="/assets/sentinel-safeguard-mark.jpg"' in resp.text
     assert 'rel="apple-touch-icon" href="/assets/sentinel-safeguard-mark.jpg"' in resp.text
-    assert "family=Archivo" in resp.text
-    assert "family=IBM+Plex+Mono" in resp.text
+    # CSP pass 2026-10-27: the typefaces are self-hosted — the page
+    # links our own fonts.css and no Google Fonts URL may appear.
+    assert 'href="/static/fonts.css"' in resp.text
+    assert "fonts.googleapis.com" not in resp.text
+    assert "fonts.gstatic.com" not in resp.text
+    css = _client(app_mod).get("/static/fonts.css").text
+    assert "font-family: 'Archivo'" in css
+    assert "font-family: 'IBM Plex Mono'" in css
+    assert "fonts.gstatic.com" not in css
 
 
 # ---------------------------------------------------------- services
@@ -574,10 +582,15 @@ def test_how_it_works_nav_active_and_header_link_everywhere(app_mod):
 def test_threat_counters_are_countup_targets(app_mod):
     resp = _client(app_mod).get("/threat-map")
     assert resp.status_code == 200
-    assert "data-cu" in resp.text
-    assert "SSG.countUp" in resp.text
+    # CSP pass 2026-10-27: page scripts are external files now; the
+    # count-up behavior (incl. the data-cu counter markup the script
+    # builds) is pinned where it lives.
+    assert "SSG.countUp" in _client(app_mod).get("/static/js/site.js").text
+    tmap = _client(app_mod).get("/static/js/threat-map.js").text
+    assert "data-cu" in tmap
+    assert "SSG.countUp" in tmap
     # first-load-only animation, refreshes update in place
-    assert "cuFirst" in resp.text
+    assert "cuFirst" in tmap
 
 
 # ------------------------------------------------------------- contact
@@ -631,14 +644,20 @@ def test_contact_form_replicates_homepage_contract(app_mod):
         'id="cf-submit"',
         'id="cf-status" role="status" aria-live="polite"',
         "This form needs JavaScript — email Sentinelsafeguard@outlook.com or call 816-533-8418 instead.",
+        "https://challenges.cloudflare.com/turnstile/v0/api.js",
+    ):
+        assert snippet in body, snippet
+    # CSP pass 2026-10-27: the submit handler is an external file;
+    # its payload contract is pinned there.
+    js = _client(app_mod).get("/static/js/contact.js").text
+    for snippet in (
         "fetch('/api/contact'",
         "'cf-turnstile-response':tsToken()",
         "Got it — your message is in.",
         "You can also email Sentinelsafeguard@outlook.com or call 816-533-8418.",
         "That did not go through. Email Sentinelsafeguard@outlook.com or call 816-533-8418",
-        "https://challenges.cloudflare.com/turnstile/v0/api.js",
     ):
-        assert snippet in body, snippet
+        assert snippet in js, snippet
 
 
 def test_contact_page_carries_no_prohibited_claims(app_mod):
@@ -917,14 +936,15 @@ def test_privacy_page_renders_with_inventory_disclosures(app_mod):
         "no Google Analytics",
         "never sold, rented, or traded",
         "fetched by Sentinel’s server",
-        # the third parties, named with their surfaces
+        # the third parties, named with their surfaces (CSP pass
+        # 2026-10-27: Google Fonts and unpkg are gone — typefaces
+        # and the Leaflet library are self-hosted, and the page
+        # says so in the closing line)
         "Cloudflare",
         "Turnstile bot check",
-        "Google Fonts",
-        "fonts.googleapis.com",
         "Esri",
         "server.arcgisonline.com",
-        "unpkg",
+        "the typefaces, and the Leaflet map library",
         # retention, stated as it actually works
         "90 days old",
         "no automatic deletion timer",
@@ -935,7 +955,7 @@ def test_privacy_page_renders_with_inventory_disclosures(app_mod):
         "handled by the owner personally",
         "separate systems with their own sign-ins",
         'href="/how-it-works"',
-        "Last updated: October 25, 2026.",
+        "Last updated: October 27, 2026.",
     ):
         assert disclosure in body, disclosure
 
