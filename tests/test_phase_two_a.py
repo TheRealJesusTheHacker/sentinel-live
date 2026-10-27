@@ -125,7 +125,10 @@ def test_stylesheet_version_query_bumped(app_mod):
     # 20261027-2 is the Threat Level + Internet Weather build
     # (2026-10-27, owner order): tl-band/tl-panel/weather styles
     # and the nav band widening to 2320px for the two new tabs.
-    assert "/static/style.css?v=20261027-2" in resp.text
+    # DEFCON-RESHAPE-2026-10-27: the DEFCON reshape widened the
+    # nav band to 2620px for the two DEFCON tabs, so the version
+    # query moved to 20261027-3.
+    assert "/static/style.css?v=20261027-3" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

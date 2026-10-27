@@ -1057,7 +1057,8 @@ async def fetch_internet_weather(timeout=20):
 
 
 # ------------------------------------------------------------------- kev
-# Sentinel Threat Level input 2026-10-27: CISA's Known Exploited
+# Sentinel Cyber DEFCON input 2026-10-27 (formerly the Threat
+# Level input; DEFCON-RESHAPE-2026-10-27): CISA's Known Exploited
 # Vulnerabilities catalog (keyless JSON feed).
 
 KEV_URL = ("https://www.cisa.gov/sites/default/files/feeds/"

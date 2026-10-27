@@ -52,7 +52,7 @@
     .field input:focus,.field select:focus,.field textarea:focus{border-color:var(--accent);outline:2px solid var(--accent);outline-offset:2px}
   
 
-/* Sentinel Threat Level 2026-10-27: badge band + level chips
+/* DEFCON badges 2026-10-27 (DEFCON-RESHAPE-2026-10-27): badge band + level chips
    (palette: the existing greens, map amber/orange, danger red). */
 .tl-band{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;text-align:center;padding:10px 16px;background:#0c100d;color:#d7e0d8;border-bottom:1px solid #1d2b20;font-family:"IBM Plex Mono",monospace;font-size:.82rem;letter-spacing:.04em}
 .tl-band a{color:#00e676;font-weight:700}

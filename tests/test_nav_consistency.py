@@ -57,6 +57,12 @@ CANONICAL_NAV = [
     ("/flights", "Flights"),
     # NEW-PAGES-2026-10-27: see the KC Scam Alerts note above.
     ("/internet-weather", "Internet Weather"),
+    # DEFCON-RESHAPE-2026-10-27 (owner order 2026-10-27): Cyber
+    # DEFCON and Geopolitical DEFCON join the nav immediately
+    # after Internet Weather; the canonical set is now 19
+    # (was 17).
+    ("/cyber-defcon", "Cyber DEFCON"),
+    ("/geopolitical-defcon", "Geopolitical DEFCON"),
     (LIBRARY, "Library"),
     ("/report-issue", "Report an Issue"),
     ("/contact", "Contact"),
@@ -93,6 +99,10 @@ CANONICAL_FOOTER = [
     ("/operations", "Operations"),
     # NEW-PAGES-2026-10-27: see the KC Scam Alerts note above.
     ("/internet-weather", "Internet Weather"),
+    # DEFCON-RESHAPE-2026-10-27: both DEFCON pages join the
+    # footer after the Internet Weather footer entry.
+    ("/cyber-defcon", "Cyber DEFCON"),
+    ("/geopolitical-defcon", "Geopolitical DEFCON"),
     (LIBRARY, "Library"),
     ("/availability", "Availability"),
     ("/disclosure", "Disclosure"),
@@ -216,7 +226,10 @@ APP_PAGES = ["/operations", "/threat-map", "/geopolitical", "/flights",
              "/faq", "/disclosure", "/availability", "/sentinel-news",
              # NEW-PAGES-2026-10-27: the two new app pages render
              # the same canonical chrome.
-             "/kc-scam-alerts", "/internet-weather"]
+             "/kc-scam-alerts", "/internet-weather",
+             # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages
+             # render the same canonical chrome.
+             "/cyber-defcon", "/geopolitical-defcon"]
 STATIC_PAGES = ["/", "/index.html", "/report-issue", "/ticket"]
 
 

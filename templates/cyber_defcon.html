@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Cyber DEFCON{% endblock %}
+{% block description %}The Sentinel Cyber DEFCON: a 5-to-1 cyber readiness level computed from CISA KEV additions, Sentinel News threat reporting, and DShield attacking sources — no hand-tuning.{% endblock %}
+{% block og_title %}Sentinel Cyber DEFCON — Sentinel Safeguard{% endblock %}
+{% block og_description %}Sentinel Safeguard's Cyber DEFCON level, computed from three public inputs: CISA KEV additions, Sentinel News Threat Watch and Patch Alert volume, and DShield attacking sources.{% endblock %}
+{% block content %}
+{# DEFCON-RESHAPE-2026-10-27: chip color = the old severity
+   scale — class tl-lvl-(6-defcon), so DEFCON 5 wears the old
+   level-1 green and DEFCON 1 wears the old level-5 red. The
+   inversion is deliberate; do not "fix" it. #}
+<section class="pagehead rv">
+  <h1>Sentinel Cyber <span class="grn">DEFCON</span></h1>
+  <p class="sub">A 5-to-1 cyber readiness level for the public
+  picture Sentinel watches — 5 ROUTINE at the quiet end, 1 SEVERE
+  at the worst. It is computed from three public inputs, and
+  nothing else.</p>
+  <p id="cyber-panel-level">{% if cyber_defcon %}DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - cyber_defcon.defcon }}">{{ cyber_defcon.defcon }} &mdash; {{ cyber_defcon.name }}</strong> &middot; score {{ cyber_defcon.score }} of 7 &middot; updated <time datetime="{{ cyber_defcon.computed_at }}">{{ cyber_defcon.computed_at }}</time>{% else %}Being computed &mdash; the first level lands once the feeds have reported in.{% endif %}</p>
+</section>
+<section class="tl-panel rv">
+  <h2>Score breakdown</h2>
+  <div id="cyber-inputs">
+    {% if cyber_defcon %}
+    <ul class="tl-input-list">
+      <li>Known exploited vulnerabilities added in the last 7 days (CISA KEV): <b>{{ cyber_defcon.inputs.kev_added_7d }}</b> &middot; {{ cyber_defcon.parts.kev_points }} points</li>
+      <li>Sentinel News Threat Watch items in the last 7 days: <b>{{ cyber_defcon.inputs.news_threat_watch_7d }}</b></li>
+      <li>Sentinel News Patch Alert items in the last 7 days: <b>{{ cyber_defcon.inputs.news_patch_alert_7d }}</b> &middot; news total {{ cyber_defcon.parts.news_points }} points</li>
+      <li>Attacking sources today (DShield): <b>{{ cyber_defcon.inputs.dshield_sources_today }}</b> &middot; {{ cyber_defcon.parts.feed_points }} points</li>
+    </ul>
+    {% else %}
+    <p class="dim">Inputs appear with the first computed level.</p>
+    {% endif %}
+  </div>
+</section>
+<section class="tl-panel rv">
+  <h2>How this is set</h2>
+  <p>The score is the sum of three public inputs. First, how many
+  vulnerabilities CISA added to its Known Exploited Vulnerabilities
+  catalog in the last 7 days (18 or more earns 3 points,
+  10&ndash;17 earns 2, 4&ndash;9 earns 1). Second, how many Threat
+  Watch and Patch Alert items Sentinel News published in the last
+  7 days (45 or more earns 2 points, 25&ndash;44 earns 1). Third,
+  how many attacking sources the DShield sensor network counted
+  today (260,000 or more earns 2 points, 180,000 or more earns 1).
+  The points add to a score of 0&ndash;7, which maps to the DEFCON
+  scale like this:</p>
+  <ul class="tl-input-list">
+    <li>Score 0&ndash;1 &rarr; <b>DEFCON 5 &mdash; ROUTINE</b></li>
+    <li>Score 2&ndash;3 &rarr; <b>DEFCON 4 &mdash; GUARDED</b></li>
+    <li>Score 4&ndash;5 &rarr; <b>DEFCON 3 &mdash; ELEVATED</b></li>
+    <li>Score 6 &rarr; <b>DEFCON 2 &mdash; HIGH</b></li>
+    <li>Score 7 &rarr; <b>DEFCON 1 &mdash; SEVERE</b></li>
+  </ul>
+  <p>There is no hand-tuning &mdash; the number is the number, and
+  the inputs above are the exact values it came from. This level
+  was formerly displayed as the &ldquo;Sentinel Threat
+  Level&rdquo; on a 1-to-5 rising scale; the math is unchanged —
+  only the name and the direction changed, to the DEFCON
+  convention where the smaller number is the serious one.</p>
+</section>
+<section class="tl-panel rv">
+  <h2>Recent days</h2>
+  <ul id="cyber-history" class="tl-history">
+    {% for h in cyber_history[-14:] %}
+    <li>{{ h.date }} <span class="tl-lvl tl-lvl-{{ 6 - h.defcon }}">{{ h.defcon }}</span></li>
+    {% else %}
+    <li class="dim">No history yet.</li>
+    {% endfor %}
+  </ul>
+  <ul class="tl-input-list">
+    {% for h in cyber_history[-14:] %}
+    <li>{{ h.date }} &middot; DEFCON {{ h.defcon }} &middot; score {{ h.score }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% include "_reader_cta.html" %}
+{% endblock %}

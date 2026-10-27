@@ -206,7 +206,10 @@ def test_stylesheet_version_query_bumped_for_design_pass(app_mod):
     # Re-pointed 2026-10-27 (owner order, new features): the
     # threat-level / internet-weather styles changed style.css,
     # so the version query moved to 20261027-2.
-    assert "/static/style.css?v=20261027-2" in resp.text
+    # DEFCON-RESHAPE-2026-10-27: the DEFCON reshape widened the
+    # nav band in style.css, so the version query moved to
+    # 20261027-3.
+    assert "/static/style.css?v=20261027-3" in resp.text
 
 
 def test_design_system_tokens_present():
@@ -451,10 +454,16 @@ def test_who_we_protect_tightening_band_covers_the_row():
     # 2040px top edge. The band now reaches 2320px (+75 over
     # need, in line with the earlier margins), and this pin
     # moved with it again, exactly as designed.
+    # DEFCON-RESHAPE-2026-10-27: Cyber DEFCON + Geopolitical
+    # DEFCON are the next additions after that — eighteen
+    # destinations: natural need ~2545px, past the 2320px top
+    # edge. The band now reaches 2620px (+75 over need, in line
+    # with the earlier margins), and this pin moved with it
+    # again, exactly as designed.
     css = (SRC / "static" / "style.css").read_text(encoding="utf-8")
-    assert "@media (max-width: 2320px) and (min-width: 861px)" in css
+    assert "@media (max-width: 2620px) and (min-width: 861px)" in css
     assert ".mainnav a { padding: .35em .38em; }" in css
-    band = css.split("@media (max-width: 2320px)")[1].split("@media")[0]
+    band = css.split("@media (max-width: 2620px)")[1].split("@media")[0]
     assert "overflow-x: auto" in band
 
 

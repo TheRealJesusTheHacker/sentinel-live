@@ -5,11 +5,14 @@ Covers the three features built 2026-10-27:
   * Internet Weather (/internet-weather + /api/internet-weather):
     the pure IODA/RIPEstat parser, the fetcher's honest failure
     states, and the page/API surface.
-  * Sentinel Threat Level: the pure scoring formula at every
-    band edge, the compute + persistence flow (snapshot write,
-    same-day replace, 30-day history trim, KEV-down keeps the
-    previous level), the /api/threat-level pending + populated
-    shapes, and the site-wide badge band.
+  * Sentinel Cyber DEFCON (DEFCON-RESHAPE-2026-10-27: the
+    Threat Level reshaped to the 5->1 DEFCON convention, same
+    math): the pure scoring formula at every band edge, the
+    score->DEFCON remap, the compute + persistence flow (snapshot
+    write, same-day replace, 30-day history trim, KEV-down keeps
+    the previous level), the legacy history migration, the
+    /api/cyber-defcon pending + populated shapes, and the
+    site-wide dual badge band + DEFCON board.
   * KC Scam Alerts: the scope field on news items (parse + push
     validation), the KC/Threat Watch filter, the page (populated
     and empty states), and the RSS feed.
@@ -241,7 +244,9 @@ def test_kev_parse_windows(app_mod):
                    "added_dates": ["2026-10-21", "2026-10-27"]}
 
 
-# ------------------------------------------------------------ threat level
+# ------------------------------------------------------------ cyber defcon
+# DEFCON-RESHAPE-2026-10-27: the threat-level pins below were
+# re-pointed to the Cyber DEFCON (same scoring, inverted scale).
 @pytest.mark.parametrize("kev7,tw7,pa7,sources,parts_exp,score_exp", [
     (0, 0, 0, 0, (0, 0, 0), 0),
     (3, 0, 0, 0, (0, 0, 0), 0),          # kev band edge: 3 -> 0
@@ -260,22 +265,24 @@ def test_kev_parse_windows(app_mod):
     (0, 0, 0, 260000, (0, 0, 2), 2),
     (18, 45, 0, 260000, (3, 2, 2), 7),   # the maximum
 ])
-def test_threat_level_score_bands(app_mod, kev7, tw7, pa7, sources,
+def test_cyber_defcon_score_bands(app_mod, kev7, tw7, pa7, sources,
                                   parts_exp, score_exp):
-    score, parts = app_mod._threat_level_score(kev7, tw7, pa7, sources)
+    score, parts = app_mod._cyber_defcon_score(kev7, tw7, pa7, sources)
     assert score == score_exp
     assert (parts["kev_points"], parts["news_points"],
             parts["feed_points"]) == parts_exp
 
 
-@pytest.mark.parametrize("score,level,name", [
-    (0, 1, "ROUTINE"), (1, 1, "ROUTINE"), (2, 2, "GUARDED"),
-    (3, 2, "GUARDED"), (4, 3, "ELEVATED"), (5, 3, "ELEVATED"),
-    (6, 4, "HIGH"), (7, 5, "SEVERE"),
+@pytest.mark.parametrize("score,defcon,name", [
+    (0, 5, "ROUTINE"), (1, 5, "ROUTINE"), (2, 4, "GUARDED"),
+    (3, 4, "GUARDED"), (4, 3, "ELEVATED"), (5, 3, "ELEVATED"),
+    (6, 2, "HIGH"), (7, 1, "SEVERE"),
 ])
-def test_threat_level_mapping(app_mod, score, level, name):
-    assert app_mod._threat_level_for_score(score) == level
-    assert app_mod._THREAT_LEVEL_NAMES[level] == name
+def test_cyber_defcon_mapping(app_mod, score, defcon, name):
+    # DEFCON-RESHAPE-2026-10-27 pin: score 3 -> DEFCON 4 GUARDED
+    # (the old scale read the same score as level 2 GUARDED).
+    assert app_mod._cyber_defcon_for_score(score) == defcon
+    assert app_mod._CYBER_DEFCON_NAMES[defcon] == name
 
 
 def _seed_compute(app_mod, monkeypatch, tmp_path, kev7=20,
@@ -288,7 +295,7 @@ def _seed_compute(app_mod, monkeypatch, tmp_path, kev7=20,
     threat = dict(app_mod.store["threat"])
     threat["sources_today"] = sources
     monkeypatch.setitem(app_mod.store, "threat", threat)
-    monkeypatch.setitem(app_mod.store, "threat_level", None)
+    monkeypatch.setitem(app_mod.store, "cyber_defcon", None)
 
 
 def test_compute_writes_snapshot_and_api(app_mod, news_dir,
@@ -300,22 +307,23 @@ def test_compute_writes_snapshot_and_api(app_mod, news_dir,
     _write(news_dir, "today-pa", date=today.isoformat(),
            tag="Patch Alert")
     _write(news_dir, "old-tw", date="2020-01-01", tag="Threat Watch")
-    current = app_mod._compute_threat_level()
-    # kev 20 -> 3, news 2 -> 0, sources 300000 -> 2  ==  5 -> ELEVATED
+    current = app_mod._compute_cyber_defcon()
+    # kev 20 -> 3, news 2 -> 0, sources 300000 -> 2  ==  score 5
+    # -> DEFCON 3 ELEVATED (DEFCON-RESHAPE-2026-10-27 remap).
     assert current["score"] == 5
-    assert current["level"] == 3 and current["name"] == "ELEVATED"
+    assert current["defcon"] == 3 and current["name"] == "ELEVATED"
     assert current["inputs"] == {
         "kev_added_7d": 20, "news_threat_watch_7d": 1,
         "news_patch_alert_7d": 1, "dshield_sources_today": 300000}
-    assert app_mod.store["threat_level"] == current
-    path = tmp_path / "data" / "threat_level.json"
+    assert app_mod.store["cyber_defcon"] == current
+    path = tmp_path / "data" / "cyber_defcon.json"
     saved = json.loads(path.read_text(encoding="utf-8"))
     assert saved["current"] == current
     assert [h["date"] for h in saved["history"]] == [today.isoformat()]
-    api = _client(app_mod).get("/api/threat-level")
+    api = _client(app_mod).get("/api/cyber-defcon")
     assert api.status_code == 200
     body = api.json()
-    assert body["level"] == 3 and body["pending"] is False
+    assert body["defcon"] == 3 and body["pending"] is False
     assert body["history"] == saved["history"]
     assert api.headers.get("cache-control") == "no-store"
 
@@ -323,18 +331,19 @@ def test_compute_writes_snapshot_and_api(app_mod, news_dir,
 def test_compute_same_day_replaces_snapshot(app_mod, news_dir,
                                             monkeypatch, tmp_path):
     _seed_compute(app_mod, monkeypatch, tmp_path)
-    first = app_mod._compute_threat_level()
-    assert first["level"] == 3
+    first = app_mod._compute_cyber_defcon()
+    assert first["defcon"] == 3
     _seed_compute(app_mod, monkeypatch, tmp_path, kev7=0, sources=0)
-    # _seed_compute reset threat_level to None; restore the level
+    # _seed_compute reset cyber_defcon to None; restore the level
     # as the previous current while KEV stays ok with new inputs.
-    second = app_mod._compute_threat_level()
-    assert second["level"] == 1 and second["score"] == 0
+    second = app_mod._compute_cyber_defcon()
+    # DEFCON-RESHAPE-2026-10-27: score 0 is DEFCON 5 (was level 1).
+    assert second["defcon"] == 5 and second["score"] == 0
     saved = json.loads(
-        (tmp_path / "data" / "threat_level.json").read_text(
+        (tmp_path / "data" / "cyber_defcon.json").read_text(
             encoding="utf-8"))
     assert len(saved["history"]) == 1  # replaced, not appended
-    assert saved["history"][0]["level"] == 1
+    assert saved["history"][0]["defcon"] == 5
 
 
 def test_compute_history_trims_to_30_days(app_mod, news_dir,
@@ -346,12 +355,14 @@ def test_compute_history_trims_to_30_days(app_mod, news_dir,
     history = [{"date": (today - timedelta(days=i)).isoformat(),
                 "level": 1, "score": 0, "inputs": {}}
                for i in range(1, 41)]
+    # DEFCON-RESHAPE-2026-10-27: this fixture is a legacy
+    # threat_level.json — the compute migrates it first.
     (data_dir / "threat_level.json").write_text(
         json.dumps({"current": None, "history": history}),
         encoding="utf-8")
-    app_mod._compute_threat_level()
+    app_mod._compute_cyber_defcon()
     saved = json.loads(
-        (data_dir / "threat_level.json").read_text(encoding="utf-8"))
+        (data_dir / "cyber_defcon.json").read_text(encoding="utf-8"))
     assert len(saved["history"]) == 30
     assert saved["history"][-1]["date"] == today.isoformat()
     assert saved["history"][0]["date"] == (
@@ -361,12 +372,12 @@ def test_compute_history_trims_to_30_days(app_mod, news_dir,
 def test_compute_kev_down_keeps_previous(app_mod, monkeypatch,
                                          tmp_path):
     _seed_compute(app_mod, monkeypatch, tmp_path)
-    previous = app_mod._compute_threat_level()
+    previous = app_mod._compute_cyber_defcon()
     assert previous is not None
     kev = dict(app_mod.store["kev"])
     kev["status"] = "error"
     monkeypatch.setitem(app_mod.store, "kev", kev)
-    assert app_mod._compute_threat_level() == previous
+    assert app_mod._compute_cyber_defcon() == previous
 
 
 def test_compute_kev_down_no_previous_is_none(app_mod, monkeypatch,
@@ -375,49 +386,103 @@ def test_compute_kev_down_no_previous_is_none(app_mod, monkeypatch,
     monkeypatch.setitem(app_mod.store, "kev", {
         "updated": None, "status": "starting", "total": 0,
         "added_7d": 0, "added_today": 0, "added_dates": []})
-    monkeypatch.setitem(app_mod.store, "threat_level", None)
-    assert app_mod._compute_threat_level() is None
+    monkeypatch.setitem(app_mod.store, "cyber_defcon", None)
+    assert app_mod._compute_cyber_defcon() is None
 
 
-def test_api_threat_level_pending(app_mod, monkeypatch, tmp_path):
+def test_api_cyber_defcon_pending(app_mod, monkeypatch, tmp_path):
     monkeypatch.setattr(app_mod, "DATA_DIR", tmp_path / "empty")
-    monkeypatch.setitem(app_mod.store, "threat_level", None)
-    r = _client(app_mod).get("/api/threat-level")
+    monkeypatch.setitem(app_mod.store, "cyber_defcon", None)
+    r = _client(app_mod).get("/api/cyber-defcon")
     assert r.status_code == 200
     body = r.json()
-    assert body["level"] is None and body["pending"] is True
+    assert body["defcon"] is None and body["pending"] is True
+    # DEFCON-RESHAPE-2026-10-27: the old route is gone.
+    assert _client(app_mod).get("/api/threat-level").status_code == 404
 
 
 def test_badge_band_and_panel_render(app_mod, monkeypatch, tmp_path):
+    # DEFCON-RESHAPE-2026-10-27: the band is now dual (both
+    # DEFCON badges) and the Operations panel is the dual board.
     monkeypatch.setattr(app_mod, "DATA_DIR", tmp_path / "empty")
-    monkeypatch.setitem(app_mod.store, "threat_level", None)
+    monkeypatch.setitem(app_mod.store, "cyber_defcon", None)
+    monkeypatch.setitem(app_mod.store, "geo_defcon", None)
     client = _client(app_mod)
     about = client.get("/about")
     assert about.status_code == 200
     assert 'id="tl-band"' in about.text
-    assert "Sentinel Threat Level" in about.text
+    assert "Cyber DEFCON" in about.text
+    assert "Geopolitical DEFCON (est.)" in about.text
+    assert 'href="/cyber-defcon"' in about.text
+    assert 'href="/geopolitical-defcon"' in about.text
     assert "being computed" in about.text
-    assert "/static/js/threat-level.js" in about.text
+    assert "/static/js/defcon.js" in about.text
+    assert "/static/js/threat-level.js" not in about.text
     ops = client.get("/operations")
     assert ops.status_code == 200
-    assert 'id="threat-level"' in ops.text
-    assert 'id="tl-panel-level"' in ops.text
-    assert 'id="tl-inputs"' in ops.text
-    assert 'id="tl-history"' in ops.text
-    assert "no hand-tuning" in ops.text
+    assert 'id="defcon-board"' in ops.text
+    assert 'id="dc-cyber-level"' in ops.text
+    assert 'id="dc-cyber-driver"' in ops.text
+    assert 'id="dc-geo-level"' in ops.text
+    assert 'id="dc-geo-driver"' in ops.text
+    assert "open-source estimate" in ops.text
 
 
 def test_badge_band_in_static_homepage_bytes():
+    # DEFCON-RESHAPE-2026-10-27: both badges + the board live in
+    # the static shells too, driven by defcon.js.
     home = (SRC / "site" / "index.html").read_text(encoding="utf-8")
     assert 'id="tl-band"' in home
-    assert "Sentinel Threat Level" in home
-    assert "/static/js/threat-level.js" in home
-    assert 'id="threat-level"' in home  # the homepage panel
-    assert 'id="tl-panel-level"' in home
+    assert "Cyber DEFCON" in home
+    assert "Geopolitical DEFCON (est.)" in home
+    assert "/static/js/defcon.js" in home
+    assert "/static/js/threat-level.js" not in home
+    assert 'id="defcon-board"' in home  # the homepage board
+    assert 'id="dc-cyber-level"' in home
+    assert 'id="dc-geo-level"' in home
     for rel in ("site/report-issue/index.html", "site/ticket/index.html"):
         text = (SRC / rel).read_text(encoding="utf-8")
         assert 'id="tl-band"' in text, rel
-        assert "/static/js/threat-level.js" in text, rel
+        assert "Cyber DEFCON" in text, rel
+        assert "Geopolitical DEFCON (est.)" in text, rel
+        assert "/static/js/defcon.js" in text, rel
+
+
+def test_history_migration_from_threat_level(app_mod, monkeypatch,
+                                              tmp_path):
+    # DEFCON-RESHAPE-2026-10-27 migration pin: a legacy
+    # threat_level.json (today's shipped state: level 2, score 3)
+    # seeds cyber_defcon.json converted — defcon = 6 - level —
+    # and the old file is left untouched on disk.
+    monkeypatch.setattr(app_mod, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setitem(app_mod.store, "cyber_defcon", None)
+    data_dir = tmp_path / "data"
+    data_dir.mkdir(parents=True)
+    legacy = {"current": {"level": 2, "name": "GUARDED", "score": 3,
+                          "parts": {"kev_points": 1,
+                                    "news_points": 1,
+                                    "feed_points": 1},
+                          "inputs": {"kev_added_7d": 9},
+                          "computed_at": "2026-10-27T12:00:00+00:00"},
+              "history": [{"date": "2026-10-27", "level": 2,
+                           "score": 3, "inputs": {}},
+                          {"date": "2026-10-26", "level": 1,
+                           "score": 1, "inputs": {}}]}
+    legacy_text = json.dumps(legacy)
+    (data_dir / "threat_level.json").write_text(
+        legacy_text, encoding="utf-8")
+    current = app_mod._get_cyber_defcon()
+    assert current["defcon"] == 4 and current["name"] == "GUARDED"
+    assert current["score"] == 3
+    assert current["inputs"] == {"kev_added_7d": 9}
+    history = app_mod._get_cyber_history()
+    assert [(h["date"], h["defcon"]) for h in history] == [
+        ("2026-10-27", 4), ("2026-10-26", 5)]
+    saved = json.loads(
+        (data_dir / "cyber_defcon.json").read_text(encoding="utf-8"))
+    assert saved["current"]["defcon"] == 4
+    assert (data_dir / "threat_level.json").read_text(
+        encoding="utf-8") == legacy_text  # old file untouched
 
 
 # ------------------------------------------------------------ kc scam alerts

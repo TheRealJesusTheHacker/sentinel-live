@@ -575,7 +575,9 @@ _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/training/phishing", "/faq", "/disclosure",
                          "/availability", "/sentinel-news",
                          # New pages 2026-10-27 (owner order).
-                         "/kc-scam-alerts", "/internet-weather"}
+                         "/kc-scam-alerts", "/internet-weather",
+                         # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages.
+                         "/cyber-defcon", "/geopolitical-defcon"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -826,11 +828,13 @@ store = {
                 "totals": {"countries_affected": 0, "outage_events": 0,
                            "alerts_24h": 0},
                 "countries": [], "events": [], "error": None},
-    # Sentinel Threat Level 2026-10-27: CISA KEV counts + the
-    # computed level (dict) or None until the first compute lands.
+    # Sentinel Cyber DEFCON 2026-10-27 (DEFCON-RESHAPE-2026-10-27):
+    # CISA KEV counts + the computed levels (dicts) or None until
+    # the first computes land.
     "kev": {"updated": None, "status": "starting", "total": 0,
             "added_7d": 0, "added_today": 0, "added_dates": []},
-    "threat_level": None,
+    "cyber_defcon": None,
+    "geo_defcon": None,
 }
 
 # ------------------------------------------------------------------ sqlite
@@ -1105,12 +1109,14 @@ async def _startup():
     asyncio.create_task(_refresh_loop("news", fcfg["news_refresh_minutes"],
                                       feeds.fetch_news_sections,
                                       config["rss"]["news_sections"], to))
-    # Internet Weather + KEV + Threat Level 2026-10-27.
+    # Internet Weather + KEV + DEFCON engines 2026-10-27
+    # (DEFCON-RESHAPE-2026-10-27).
     asyncio.create_task(_refresh_loop("weather",
                                       fcfg["weather_refresh_minutes"],
                                       feeds.fetch_internet_weather, to))
     asyncio.create_task(_refresh_loop("kev", 60, feeds.fetch_kev, to))
-    asyncio.create_task(_threat_level_loop())
+    asyncio.create_task(_cyber_defcon_loop())
+    asyncio.create_task(_geo_defcon_loop())
     # BH-2026-10-23 (L-1): turnstile enabled with no secret configured
     # silently no-ops the form bot check — say so loudly at startup
     # instead of letting the site look protected when it is not.
@@ -1514,28 +1520,32 @@ async def internal_news_delete(request: Request):
 
 
 
-# ------------------------------------------------------- threat level
-# Sentinel Threat Level 2026-10-27 (owner order): a site-wide level
-# computed ONLY from three public inputs — no hand-tuning, ever.
+# ------------------------------------------------------- cyber defcon
+# Sentinel Cyber DEFCON 2026-10-27 (DEFCON-RESHAPE-2026-10-27,
+# owner order): the former "Sentinel Threat Level", reshaped to
+# the 5->1 DEFCON convention. The MATH IS IDENTICAL — same three
+# public inputs, same point bands, same score 0-7:
 #   KEV points:  CISA KEV additions in the trailing 7 days —
 #                >=18 -> 3, 10-17 -> 2, 4-9 -> 1, else 0.
 #   News points: Sentinel News Threat Watch + Patch Alert items in
 #                the trailing 7 days — >=45 -> 2, 25-44 -> 1, else 0.
 #   Feed points: DShield attacking sources today —
 #                >=260000 -> 2, >=180000 -> 1, else 0.
-# score = sum (0-7). Level: 0-1 -> 1 ROUTINE, 2-3 -> 2 GUARDED,
-# 4-5 -> 3 ELEVATED, 6 -> 4 HIGH, 7 -> 5 SEVERE.
-_THREAT_LEVEL_NAMES = {1: "ROUTINE", 2: "GUARDED", 3: "ELEVATED",
-                       4: "HIGH", 5: "SEVERE"}
+# Only the scale direction changed: score 0-1 -> DEFCON 5,
+# 2-3 -> 4, 4-5 -> 3, 6 -> 2, 7 -> 1.
+_CYBER_DEFCON_NAMES = {5: "ROUTINE", 4: "GUARDED", 3: "ELEVATED",
+                       2: "HIGH", 1: "SEVERE"}
+# The geopolitical estimate uses the same DEFCON names.
+_GEO_DEFCON_NAMES = dict(_CYBER_DEFCON_NAMES)
 
 
-def _threat_level_path():
+def _cyber_defcon_path():
     """The persistence file, resolved from DATA_DIR at call time
     so tests can point DATA_DIR at a scratch directory."""
-    return DATA_DIR / "threat_level.json"
+    return DATA_DIR / "cyber_defcon.json"
 
 
-def _threat_level_score(kev7, tw7, pa7, sources_today):
+def _cyber_defcon_score(kev7, tw7, pa7, sources_today):
     """Pure scoring — the formula above, nothing else. Returns
     (score, parts) where parts carries each input's points."""
     try:
@@ -1560,24 +1570,75 @@ def _threat_level_score(kev7, tw7, pa7, sources_today):
     return kev_points + news_points + feed_points, parts
 
 
-def _threat_level_for_score(score):
+# Back-compat alias: the scoring bands are unchanged by the reshape.
+_threat_level_score = _cyber_defcon_score
+
+
+def _cyber_defcon_for_score(score):
+    """Score -> DEFCON (inverted direction vs the old level)."""
     if score <= 1:
-        return 1
+        return 5
     if score <= 3:
-        return 2
+        return 4
     if score <= 5:
         return 3
     if score == 6:
-        return 4
-    return 5
+        return 2
+    return 1
 
 
-def _load_threat_level_file(path=None):
+def _convert_legacy_threat_level(data):
+    """HISTORY MIGRATION (DEFCON-RESHAPE-2026-10-27): convert a
+    legacy threat_level.json payload ({current, history} with
+    level 1-5) to the cyber_defcon shape (defcon = 6 - level,
+    keeping score/inputs/dates). Returns the converted dict."""
+    def conv_current(old):
+        if not isinstance(old, dict):
+            return None
+        try:
+            level = int(old.get("level") or 0)
+        except (TypeError, ValueError):
+            return None
+        if level < 1 or level > 5:
+            return None
+        defcon = 6 - level
+        return {"defcon": defcon, "name": _CYBER_DEFCON_NAMES[defcon],
+                "score": old.get("score"),
+                "parts": old.get("parts") if isinstance(
+                    old.get("parts"), dict) else {},
+                "inputs": old.get("inputs") if isinstance(
+                    old.get("inputs"), dict) else {},
+                "computed_at": old.get("computed_at")}
+    history = []
+    raw_hist = data.get("history") if isinstance(data, dict) else None
+    for entry in (raw_hist if isinstance(raw_hist, list) else []):
+        if not isinstance(entry, dict):
+            continue
+        try:
+            level = int(entry.get("level") or 0)
+        except (TypeError, ValueError):
+            continue
+        if level < 1 or level > 5 or not entry.get("date"):
+            continue
+        history.append({"date": entry.get("date"),
+                        "defcon": 6 - level,
+                        "score": entry.get("score"),
+                        "inputs": entry.get("inputs") if isinstance(
+                            entry.get("inputs"), dict) else {}})
+    current = conv_current(data.get("current")) if isinstance(
+        data, dict) else None
+    return {"current": current, "history": history}
+
+
+def _load_cyber_defcon_file(path=None):
     """The persisted {current, history} dict, or an empty shape.
-    Never raises — a missing or malformed file is 'no level yet'."""
-    path = path or _threat_level_path()
+    Never raises — a missing or malformed file is 'no level yet'.
+    If cyber_defcon.json is absent but a legacy threat_level.json
+    sits beside it, the legacy state is converted and persisted
+    as the new file's seed (the old file is left untouched)."""
+    path = Path(path) if path else _cyber_defcon_path()
     try:
-        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        data = json.loads(path.read_text(encoding="utf-8"))
         if isinstance(data, dict):
             current = data.get("current")
             history = data.get("history")
@@ -1587,24 +1648,44 @@ def _load_threat_level_file(path=None):
                     else []}
     except Exception:
         pass
+    # Migration seed: only when the cyber file itself is absent.
+    if not path.exists():
+        legacy = path.with_name("threat_level.json")
+        try:
+            if legacy.is_file():
+                data = json.loads(legacy.read_text(encoding="utf-8"))
+                if isinstance(data, dict):
+                    converted = _convert_legacy_threat_level(data)
+                    try:
+                        path.parent.mkdir(parents=True, exist_ok=True)
+                        tmp = path.with_name(path.name + ".tmp")
+                        tmp.write_text(json.dumps(
+                            converted, indent=1, sort_keys=True),
+                            encoding="utf-8")
+                        os.replace(tmp, path)
+                    except Exception:
+                        pass  # the in-memory conversion still holds
+                    return converted
+        except Exception:
+            pass
     return {"current": None, "history": []}
 
 
-def _get_threat_level():
+def _get_cyber_defcon():
     """Cheap, never-raising getter for templates: the in-memory
     current level, else the file-loaded current, else None."""
     try:
-        cur = store.get("threat_level")
-        if isinstance(cur, dict) and cur.get("level"):
+        cur = store.get("cyber_defcon")
+        if isinstance(cur, dict) and cur.get("defcon"):
             return cur
-        return _load_threat_level_file()["current"]
+        return _load_cyber_defcon_file()["current"]
     except Exception:
         return None
 
 
-def _get_threat_history():
+def _get_cyber_history():
     try:
-        return _load_threat_level_file()["history"]
+        return _load_cyber_defcon_file()["history"]
     except Exception:
         return []
 
@@ -1613,22 +1694,23 @@ def _chicago_today():
     return datetime.now(timezone.utc).astimezone(_CHICAGO_TZ).date()
 
 
-def _compute_threat_level(path=None):
-    """Compute the current level from the live stores, persist it
-    (atomic tmp+rename, today's snapshot upserted into a history
-    trimmed to the last 30 days), and set store["threat_level"].
-    When KEV has not landed (status not ok) an existing current
-    level is kept unchanged; with none, returns None — the badge
-    shows 'being computed' honestly until the first compute."""
-    path = Path(path) if path else _threat_level_path()
-    existing = _load_threat_level_file(path)
-    previous = store.get("threat_level")
-    if not (isinstance(previous, dict) and previous.get("level")):
+def _compute_cyber_defcon(path=None):
+    """Compute the current Cyber DEFCON from the live stores,
+    persist it (atomic tmp+rename, today's snapshot upserted into
+    a history trimmed to the last 30 days), and set
+    store["cyber_defcon"]. When KEV has not landed (status not
+    ok) an existing current level is kept unchanged; with none,
+    returns None — the badge shows 'being computed' honestly
+    until the first compute."""
+    path = Path(path) if path else _cyber_defcon_path()
+    existing = _load_cyber_defcon_file(path)
+    previous = store.get("cyber_defcon")
+    if not (isinstance(previous, dict) and previous.get("defcon")):
         previous = existing["current"]
     kev = store.get("kev") or {}
     if not isinstance(kev, dict) or kev.get("status") != "ok":
         if previous:
-            store["threat_level"] = previous
+            store["cyber_defcon"] = previous
             return previous
         return None
     today = _chicago_today()
@@ -1655,12 +1737,12 @@ def _compute_threat_level(path=None):
         kev7 = int(kev.get("added_7d") or 0)
     except (TypeError, ValueError):
         kev7 = 0
-    score, parts = _threat_level_score(kev7, tw7, pa7, sources_today)
-    level = _threat_level_for_score(score)
+    score, parts = _cyber_defcon_score(kev7, tw7, pa7, sources_today)
+    defcon = _cyber_defcon_for_score(score)
     inputs = {"kev_added_7d": kev7, "news_threat_watch_7d": tw7,
               "news_patch_alert_7d": pa7,
               "dshield_sources_today": sources_today}
-    current = {"level": level, "name": _THREAT_LEVEL_NAMES[level],
+    current = {"defcon": defcon, "name": _CYBER_DEFCON_NAMES[defcon],
                "score": score, "parts": parts, "inputs": inputs,
                "computed_at": _utcnow()}
     date_str = today.isoformat()
@@ -1676,7 +1758,7 @@ def _compute_threat_level(path=None):
             continue
         if d_ord >= cutoff_ord and entry.get("date") != date_str:
             history.append(entry)
-    history.append({"date": date_str, "level": level, "score": score,
+    history.append({"date": date_str, "defcon": defcon, "score": score,
                     "inputs": inputs})
     history.sort(key=lambda e: str(e.get("date") or ""))
     history = history[-30:]
@@ -1689,24 +1771,527 @@ def _compute_threat_level(path=None):
                        encoding="utf-8")
         os.replace(tmp, path)
     except Exception as e:
-        log.warning("threat level persist failed: %s",
+        log.warning("cyber defcon persist failed: %s",
                     type(e).__name__)
-    store["threat_level"] = current
+    store["cyber_defcon"] = current
     return current
 
 
-async def _threat_level_loop():
-    """Hourly threat-level compute. The first run waits ~25s so
+async def _cyber_defcon_loop():
+    """Hourly Cyber DEFCON compute. The first run waits ~25s so
     the KEV/threat feeds have a chance to land; after that the
-    loop recomputes every 60 minutes. _compute_threat_level keeps
+    loop recomputes every 60 minutes. _compute_cyber_defcon keeps
     the previous level when KEV is unavailable, so an early run
     with no KEV yet costs nothing."""
     await asyncio.sleep(25)
     while True:
         try:
-            _compute_threat_level()
+            _compute_cyber_defcon()
         except Exception:
-            log.exception("threat level compute failed")
+            log.exception("cyber defcon compute failed")
+        await asyncio.sleep(60 * 60)
+
+
+# ------------------------------------------- geopolitical defcon
+# Geopolitical DEFCON estimate 2026-10-27 (DEFCON-RESHAPE-
+# 2026-10-27, owner order): an OPEN-SOURCE ESTIMATE of the
+# United States geopolitical DEFCON level — the actual level is
+# classified. Five signal families feed a pressure score; a
+# candidate level is only ever produced by multi-signal
+# triangulation (no single feed can move this level alone), and
+# inertia (consecutive-evaluation confirmation) keeps the level
+# from jittering on one-off spikes.
+WAR_CLASS = ("war", "airstrike", "air strike", "missile strike",
+             "offensive", "invasion", "ceasefire", "front line",
+             "frontline", "shelling", "bombardment", "drone strike",
+             "military operation", "armed conflict", "warzone",
+             "war zone")
+POSTURE_CLASS = ("u.s. strike", "us strike", "u.s. troops",
+                 "us troops", "u.s. military", "us military",
+                 "pentagon", "nato", "carrier strike",
+                 "carrier group", "troop deployment",
+                 "deployment of u.s", "deployment of us",
+                 "u.s. base", "us base", "u.s. forces", "us forces",
+                 "american forces", "u.s. warship", "us warship",
+                 "military aid", "weapons package")
+NUCLEAR_CLASS = ("nuclear", "warhead", "icbm", "atomic weapon",
+                 "ballistic missile", "nuclear threat",
+                 "nuclear deterrent", "strategic forces")
+CONFRONTATION_CLASS = ("naval blockade", "blockade of",
+                       "quarantine", "shot down a u.s",
+                       "shot down a us", "shot down an american",
+                       "airborne alert", "strategic bombers",
+                       "nuclear forces on alert",
+                       "forces on high alert", "direct clash",
+                       "clash between u.s. and",
+                       "clash between us and", "exchange of fire")
+IMMINENT_CLASS = ("nuclear strike launched",
+                  "nuclear attack underway", "nuclear detonation",
+                  "nuclear exchange", "missiles launched at",
+                  "first nuclear strike", "nuclear weapon used",
+                  "nuclear weapons used")
+
+_DOOMSDAY_CLOCK_URL = "https://thebulletin.org/doomsday-clock/"
+# Cold seed for the Doomsday Clock: 85 seconds — fetched live
+# from the Bulletin on 2026-10-27 during design of this engine.
+_DOOMSDAY_COLD_SEED = 85
+_GDELT_URL = ("https://api.gdeltproject.org/api/v2/doc/doc?"
+              "query=%28war%20OR%20missile%20OR%20airstrike%20OR"
+              "%20offensive%29&mode=timelinevolinfo&timespan=7d"
+              "&format=json")
+
+
+def _geo_defcon_path():
+    return DATA_DIR / "geo_defcon.json"
+
+
+def _count_class(texts, keywords):
+    """Distinct items with at least one keyword hit (lowercase
+    substring scan)."""
+    n = 0
+    for text in texts:
+        low = str(text or "").lower()
+        if any(kw in low for kw in keywords):
+            n += 1
+    return n
+
+
+def _has_class(texts, keywords):
+    return any(any(kw in str(t or "").lower() for kw in keywords)
+               for t in texts)
+
+
+def _band_a(count):
+    return 3 if count >= 5 else 2 if count >= 3 else \
+        1 if count >= 1 else 0
+
+
+def _band_b(count):
+    return 3 if count >= 6 else 2 if count >= 3 else \
+        1 if count >= 1 else 0
+
+
+def _band_c(count):
+    return 3 if count >= 4 else 2 if count >= 2 else \
+        1 if count >= 1 else 0
+
+
+def _doomsday_score(seconds):
+    """Doomsday Clock band: <=90s -> 2, 91-120s -> 1, >120s -> 0.
+    Family D counts as an ELEVATED family iff its score == 2:
+    at its closest-ever settings the Bulletin board is itself an
+    elevated civil-advisory signal."""
+    if seconds is None:
+        return 0
+    return 2 if seconds <= 90 else 1 if seconds <= 120 else 0
+
+
+def _parse_doomsday_clock(text):
+    """First 'NN seconds to midnight' match in Bulletin page
+    text, or None."""
+    if not text:
+        return None
+    m = re.search(r"(\d+)\s*seconds to midnight", str(text))
+    if not m:
+        return None
+    try:
+        return int(m.group(1))
+    except (TypeError, ValueError):
+        return None
+
+
+def _gdelt_score_from_ratio(ratio):
+    if ratio is None:
+        return None
+    return 2 if ratio >= 1.5 else 1 if ratio >= 1.2 else 0
+
+
+def _gdelt_parse(payload):
+    """GDELT timelinevolinfo payload -> (score, ratio). Any
+    malformed shape is (None, None): E is opportunistic only."""
+    try:
+        points = payload.get("timeline") if isinstance(
+            payload, dict) else None
+        values = []
+        for point in (points or []):
+            if isinstance(point, dict):
+                values.append(float(point.get("value") or 0))
+        if not values:
+            return None, None
+        mean = sum(values) / len(values)
+        if mean <= 0:
+            return None, None
+        ratio = values[-1] / mean
+        return _gdelt_score_from_ratio(ratio), ratio
+    except (TypeError, ValueError):
+        return None, None
+
+
+def _geo_pressure(families):
+    total = 0
+    for key in ("A", "B", "C", "D"):
+        try:
+            total += int(families.get(key) or 0)
+        except (TypeError, ValueError):
+            pass
+    # E is opportunistic: a single-source volume metric informs
+    # pressure but can never concur in a triangulation, so it is
+    # excluded from the elevated set (see _geo_elevated) even
+    # though its points count toward pressure when available.
+    try:
+        total += int(families.get("E") or 0)
+    except (TypeError, ValueError):
+        pass
+    return total
+
+
+def _geo_elevated(families):
+    out = []
+    for key in ("A", "B", "C"):
+        try:
+            if int(families.get(key) or 0) >= 2:
+                out.append(key)
+        except (TypeError, ValueError):
+            pass
+    try:
+        if int(families.get("D") or 0) == 2:
+            out.append("D")
+    except (TypeError, ValueError):
+        pass
+    return out
+
+
+def _geo_candidate(families, confrontation=False, imminent=False):
+    """Pure candidate rule — tests drive this with synthetic
+    family scores + flags. families: {A,B,C,D,E} scores (E may
+    be None). Triangulation: the severe levels require BOTH high
+    pressure AND at least three elevated families AND a flag;
+    DEFCON 3 requires pressure >= 5 AND at least two elevated
+    families, so no single family can move the level alone."""
+    pressure = _geo_pressure(families)
+    elevated = _geo_elevated(families)
+    if imminent and pressure >= 9 and len(elevated) >= 3:
+        return 1
+    if confrontation and pressure >= 7 and len(elevated) >= 3:
+        return 2
+    if pressure >= 5 and len(elevated) >= 2:
+        return 3
+    if pressure >= 3:
+        return 4
+    return 5
+
+
+def _geo_required_confirmations(candidate):
+    """Inertia: moves to DEFCON 2 or 1 need 3 consecutive
+    evaluations; any other move needs 2."""
+    return 3 if candidate <= 2 else 2
+
+
+def _load_geo_defcon_file(path=None):
+    """The persisted geo state {current, pending, history,
+    changes, clock_seconds}, or an empty shape. Never raises."""
+    path = Path(path) if path else _geo_defcon_path()
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            def _dict_or_none(v):
+                return v if isinstance(v, dict) else None
+            def _list_or_empty(v):
+                return v if isinstance(v, list) else []
+            clock = data.get("clock_seconds")
+            try:
+                clock = int(clock) if clock is not None else None
+            except (TypeError, ValueError):
+                clock = None
+            return {"current": _dict_or_none(data.get("current")),
+                    "pending": _dict_or_none(data.get("pending")),
+                    "history": _list_or_empty(data.get("history")),
+                    "changes": _list_or_empty(data.get("changes")),
+                    "clock_seconds": clock}
+    except Exception:
+        pass
+    return {"current": None, "pending": None, "history": [],
+            "changes": [], "clock_seconds": None}
+
+
+def _get_geo_defcon():
+    try:
+        cur = store.get("geo_defcon")
+        if isinstance(cur, dict) and cur.get("defcon"):
+            return cur
+        return _load_geo_defcon_file()["current"]
+    except Exception:
+        return None
+
+
+def _get_geo_history():
+    try:
+        return _load_geo_defcon_file()["history"]
+    except Exception:
+        return []
+
+
+def _get_geo_changes():
+    try:
+        return _load_geo_defcon_file()["changes"]
+    except Exception:
+        return []
+
+
+def _get_geo_pending():
+    try:
+        return _load_geo_defcon_file()["pending"]
+    except Exception:
+        return None
+
+
+def _geo_corpora():
+    """(geo_titles, news_texts) for one evaluation. Geo items are
+    store["geo"]["items"] titles; the news corpus is published
+    Sentinel News items dated in the trailing 7 days, as
+    title + summary text (one item = one counting unit)."""
+    geo_titles = []
+    geo = store.get("geo") or {}
+    if isinstance(geo, dict):
+        for item in (geo.get("items") or []):
+            if isinstance(item, dict):
+                geo_titles.append(str(item.get("title") or ""))
+    today = _chicago_today()
+    start_ord = today.toordinal() - 6
+    news_texts = []
+    for item in _load_news():
+        try:
+            day = datetime.strptime(
+                str(item.get("date") or ""), "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        if not (start_ord <= day.toordinal() <= today.toordinal()):
+            continue
+        news_texts.append(str(item.get("title") or "") + " " +
+                          str(item.get("summary") or ""))
+    return geo_titles, news_texts
+
+
+def _compute_geo_defcon(path=None, clock_seconds=None,
+                        clock_source=None, gdelt_score=None,
+                        gdelt_ratio=None, gdelt_status=None):
+    """One geopolitical evaluation (sync core; the live wrapper
+    fetches the clock + GDELT first and passes them in).
+
+    clock_seconds=None means 'no live clock this run': the last
+    good persisted seconds are used, or the cold seed when no
+    state file exists yet — the source is then 'last-known'.
+    gdelt_status defaults to 'unavailable' with score None: E
+    contributes 0 and never counts as an elevated family.
+
+    Empty corpora: with no current, returns None (pending — no
+    invented level); with a current, keeps it and its timestamp.
+    """
+    path = Path(path) if path else _geo_defcon_path()
+    state = _load_geo_defcon_file(path)
+    previous = store.get("geo_defcon")
+    if not (isinstance(previous, dict) and previous.get("defcon")):
+        previous = state["current"]
+    geo_titles, news_texts = _geo_corpora()
+    if not geo_titles and not news_texts:
+        if previous:
+            store["geo_defcon"] = previous
+            return previous
+        return None
+    # Clock: live value persists as the new last-good.
+    if clock_seconds is not None:
+        try:
+            clock_seconds = int(clock_seconds)
+        except (TypeError, ValueError):
+            clock_seconds = None
+    if clock_seconds is not None:
+        clock_source = clock_source or "live"
+        last_clock = clock_seconds
+    else:
+        last_clock = state["clock_seconds"]
+        if last_clock is None:
+            last_clock = _DOOMSDAY_COLD_SEED
+        clock_seconds = last_clock
+        clock_source = "last-known"
+    if gdelt_status is None:
+        gdelt_status = "ok" if gdelt_score is not None \
+            else "unavailable"
+    if gdelt_status != "ok":
+        gdelt_score = None
+        gdelt_ratio = None
+    combined = list(geo_titles) + list(news_texts)
+    counts = {"A": _count_class(geo_titles, WAR_CLASS),
+              "B": _count_class(combined, POSTURE_CLASS),
+              "C": _count_class(combined, NUCLEAR_CLASS)}
+    families = {"A": _band_a(counts["A"]),
+                "B": _band_b(counts["B"]),
+                "C": _band_c(counts["C"]),
+                "D": _doomsday_score(clock_seconds),
+                "E": gdelt_score}
+    flags = {"confrontation": _has_class(combined,
+                                         CONFRONTATION_CLASS),
+             "imminent": _has_class(combined, IMMINENT_CLASS)}
+    pressure = _geo_pressure(families)
+    elevated = _geo_elevated(families)
+    candidate = _geo_candidate(families, flags["confrontation"],
+                               flags["imminent"])
+    inputs = {"geo_items": len(geo_titles),
+              "news_items_7d": len(news_texts),
+              "counts": counts,
+              "clock_seconds": clock_seconds,
+              "clock_source": clock_source,
+              "gdelt": gdelt_status,
+              "gdelt_ratio": gdelt_ratio,
+              "gdelt_score": gdelt_score}
+    now_str = _utcnow()
+    changes = list(state["changes"])
+    pending = state["pending"]
+    applied = False
+    if previous is None:
+        # First-ever compute applies immediately — no dwell.
+        current_defcon = candidate
+        pending = None
+        applied = True
+    elif candidate == previous.get("defcon"):
+        current_defcon = candidate
+        pending = None
+    else:
+        if isinstance(pending, dict) and \
+                pending.get("defcon") == candidate:
+            try:
+                count = int(pending.get("count") or 0) + 1
+            except (TypeError, ValueError):
+                count = 1
+        else:
+            count = 1
+        pending = {"defcon": candidate, "count": count}
+        if count >= _geo_required_confirmations(candidate):
+            changes.append({
+                "ts": now_str, "from": previous.get("defcon"),
+                "to": candidate, "pressure": pressure,
+                "families": families, "elevated": elevated,
+                "flags": flags, "inputs": inputs})
+            current_defcon = candidate
+            pending = None
+            applied = True
+        else:
+            current_defcon = previous.get("defcon")
+    if previous is not None and not applied and \
+            current_defcon == previous.get("defcon") and \
+            pending is not None:
+        # A pending move does not move the level: the standing
+        # current (and its supporting inputs) stays exactly as
+        # last applied/computed until the move confirms.
+        current = previous
+    else:
+        current = {"defcon": current_defcon,
+                   "name": _GEO_DEFCON_NAMES[current_defcon],
+                   "pressure": pressure, "families": families,
+                   "elevated": elevated, "flags": flags,
+                   "inputs": inputs,
+                   "clock_seconds": clock_seconds,
+                   "clock_source": clock_source,
+                   "gdelt": gdelt_status,
+                   "computed_at": now_str}
+    today = _chicago_today()
+    date_str = today.isoformat()
+    cutoff_ord = today.toordinal() - 29
+    history = []
+    for entry in state["history"]:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            d_ord = datetime.strptime(
+                str(entry.get("date") or ""), "%Y-%m-%d").date().toordinal()
+        except (TypeError, ValueError):
+            continue
+        if d_ord >= cutoff_ord and entry.get("date") != date_str:
+            history.append(entry)
+    history.append({"date": date_str, "defcon": current["defcon"],
+                    "pressure": current.get("pressure"),
+                    "inputs": current.get("inputs") or {}})
+    history.sort(key=lambda e: str(e.get("date") or ""))
+    history = history[-30:]
+    new_state = {"current": current, "pending": pending,
+                 "history": history, "changes": changes,
+                 "clock_seconds": last_clock}
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps(new_state, indent=1,
+                                  sort_keys=True),
+                       encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception as e:
+        log.warning("geo defcon persist failed: %s",
+                    type(e).__name__)
+    store["geo_defcon"] = current
+    return current
+
+
+async def _fetch_doomsday_seconds():
+    """Live Doomsday Clock seconds, or None on any failure (the
+    caller falls back to the last-known persisted value)."""
+    try:
+        timeout = config["feeds"]["request_timeout_seconds"]
+    except Exception:
+        timeout = 20
+    try:
+        async with httpx.AsyncClient(timeout=min(timeout, 15)) \
+                as client:
+            resp = await client.get(_DOOMSDAY_CLOCK_URL)
+            resp.raise_for_status()
+            return _parse_doomsday_clock(resp.text)
+    except Exception:
+        return None
+
+
+async def _fetch_gdelt():
+    """One GDELT timeline call -> (score, ratio, status). ANY
+    failure is 'unavailable': E is opportunistic, and this
+    estate's IP currently sits in GDELT's rate-limit pool, so
+    unavailability is the expected steady state, not an error
+    worth surfacing as one."""
+    try:
+        timeout = config["feeds"]["request_timeout_seconds"]
+    except Exception:
+        timeout = 20
+    try:
+        async with httpx.AsyncClient(timeout=min(timeout, 15)) \
+                as client:
+            resp = await client.get(_GDELT_URL)
+            resp.raise_for_status()
+            score, ratio = _gdelt_parse(resp.json())
+            if score is None:
+                return None, None, "unavailable"
+            return score, ratio, "ok"
+    except Exception:
+        return None, None, "unavailable"
+
+
+async def _compute_geo_defcon_live():
+    clock = await _fetch_doomsday_seconds()
+    g_score, g_ratio, g_status = await _fetch_gdelt()
+    if clock is not None:
+        return _compute_geo_defcon(
+            clock_seconds=clock, clock_source="live",
+            gdelt_score=g_score, gdelt_ratio=g_ratio,
+            gdelt_status=g_status)
+    return _compute_geo_defcon(
+        gdelt_score=g_score, gdelt_ratio=g_ratio,
+        gdelt_status=g_status)
+
+
+async def _geo_defcon_loop():
+    """Hourly geopolitical evaluation. The first run waits ~35s
+    (staggered after the Cyber DEFCON loop's ~25s) so the geo
+    feed has a chance to land; after that, hourly."""
+    await asyncio.sleep(35)
+    while True:
+        try:
+            await _compute_geo_defcon_live()
+        except Exception:
+            log.exception("geo defcon compute failed")
         await asyncio.sleep(60 * 60)
 
 
@@ -1725,11 +2310,14 @@ def _kc_scam_alerts():
 # ------------------------------------------------------------------ pages
 def _ctx(request: Request, **kw):
     base = {"request": request, "now": _utcnow(),
-            # Threat Level 2026-10-27: every app page carries the
-            # badge band (base.html) and the Operations panel reads
-            # the history; both getters are cheap and never raise.
-            "threat_level": _get_threat_level(),
-            "threat_history": _get_threat_history()}
+            # DEFCON-RESHAPE-2026-10-27: every app page carries
+            # the dual badge band (base.html) and the Operations
+            # board reads both levels + histories; all getters are
+            # cheap and never raise.
+            "cyber_defcon": _get_cyber_defcon(),
+            "cyber_history": _get_cyber_history(),
+            "geo_defcon": _get_geo_defcon(),
+            "geo_history": _get_geo_history()}
     base.update(kw)
     return base
 
@@ -2217,7 +2805,9 @@ _SITEMAP_PATHS = ["/", "/about", "/services",
                   "/contact", "/report-issue",
                   "/assessment", "/tools", "/training/phishing",
                   "/faq", "/disclosure", "/availability",
-                  "/sentinel-news", "/kc-scam-alerts"]
+                  "/sentinel-news", "/kc-scam-alerts",
+                  # DEFCON-RESHAPE-2026-10-27: the two DEFCON pages.
+                  "/cyber-defcon", "/geopolitical-defcon"]
 
 
 @app.get("/sitemap.xml")
@@ -2301,6 +2891,25 @@ async def internet_weather(request: Request):
         request, "internet_weather.html", _ctx(request))
 
 
+@app.get("/cyber-defcon", response_class=HTMLResponse)
+async def cyber_defcon_page(request: Request):
+    # DEFCON-RESHAPE-2026-10-27: the Cyber DEFCON's own page —
+    # hero level, score breakdown, methodology, history.
+    return templates.TemplateResponse(
+        request, "cyber_defcon.html", _ctx(request))
+
+
+@app.get("/geopolitical-defcon", response_class=HTMLResponse)
+async def geopolitical_defcon_page(request: Request):
+    # DEFCON-RESHAPE-2026-10-27: the geopolitical estimate's own
+    # page — hero (estimate-labeled), drivers, methodology,
+    # backtest anchors, the self-scoring change log, history.
+    return templates.TemplateResponse(
+        request, "geopolitical_defcon.html", _ctx(
+            request, geo_pending=_get_geo_pending(),
+            geo_changes=_get_geo_changes()))
+
+
 @app.get("/geopolitical", response_class=HTMLResponse)
 async def geopolitical(request: Request):
     return templates.TemplateResponse(request, "geopolitical.html", _ctx(request))
@@ -2352,8 +2961,9 @@ async def health(request: Request):
     now = datetime.now(timezone.utc)
     return {"ok": True, "time": now.isoformat(timespec="seconds"), "frozen": FROZEN,
             "uptime_seconds": int((now - STARTED_AT).total_seconds()) if STARTED_AT else None,
-            # threat_level is a dict-or-None store entry (2026-10-27),
-            # not a feed dict — only dict stores report here.
+            # cyber_defcon / geo_defcon are dict-or-None store
+            # entries (DEFCON-RESHAPE-2026-10-27), not feed dicts —
+            # only dict stores report here.
             "feeds": {k: {"updated": v.get("updated"), "status": v.get("status")}
                       for k, v in store.items()
                       if k != "briefing" and isinstance(v, dict)}}
@@ -2394,19 +3004,44 @@ async def api_internet_weather():
     return JSONResponse(store["weather"])
 
 
-@app.get("/api/threat-level")
-async def api_threat_level():
-    # Sentinel Threat Level 2026-10-27: the current level plus its
-    # history; until the first compute lands, an honest pending
-    # shape (level null) instead of a fabricated level.
-    current = _get_threat_level()
-    history = _get_threat_history()
+@app.get("/api/cyber-defcon")
+async def api_cyber_defcon():
+    # DEFCON-RESHAPE-2026-10-27: the current Cyber DEFCON plus
+    # its history; until the first compute lands, an honest
+    # pending shape (defcon null) instead of a fabricated level.
+    # (The old /api/threat-level route is removed by this reshape.)
+    current = _get_cyber_defcon()
+    history = _get_cyber_history()
     if not current:
-        return JSONResponse({"level": None, "pending": True,
+        return JSONResponse({"defcon": None, "pending": True,
                              "history": history})
     out = dict(current)
     out["history"] = history
     out["pending"] = False
+    return JSONResponse(out)
+
+
+@app.get("/api/geo-defcon")
+async def api_geo_defcon():
+    # DEFCON-RESHAPE-2026-10-27: the geopolitical DEFCON estimate
+    # — current (with pressure, families, elevated set, flags,
+    # inputs incl. per-family raw counts, clock + GDELT status),
+    # the pending (inertia) state, history, and the change log.
+    # Until the first compute lands, defcon is null — no invented
+    # estimate.
+    current = _get_geo_defcon()
+    history = _get_geo_history()
+    changes = _get_geo_changes()
+    pending = _get_geo_pending()
+    if not current:
+        return JSONResponse({"defcon": None, "pending": pending,
+                             "awaiting_first": True,
+                             "history": history,
+                             "changes": changes})
+    out = dict(current)
+    out["history"] = history
+    out["changes"] = changes
+    out["pending"] = pending
     return JSONResponse(out)
 
 

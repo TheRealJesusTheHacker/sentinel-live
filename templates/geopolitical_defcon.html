@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Geopolitical DEFCON (Estimate){% endblock %}
+{% block description %}Sentinel Safeguard's open-source estimate of the United States geopolitical DEFCON level — multi-signal, backtest-calibrated, with a public change log. The actual DEFCON level is classified; this is an estimate, not the official level.{% endblock %}
+{% block og_title %}Geopolitical DEFCON Estimate — Sentinel Safeguard{% endblock %}
+{% block og_description %}An open-source estimate of the United States geopolitical DEFCON level by Sentinel Safeguard, built from conflict, force-posture, nuclear-rhetoric, civil-advisory, and volume signals — never from any single feed.{% endblock %}
+{% block content %}
+{# DEFCON-RESHAPE-2026-10-27: chip color = the old severity
+   scale — class tl-lvl-(6-defcon). See cyber_defcon.html. #}
+<section class="pagehead rv">
+  <h1>Geopolitical <span class="grn">DEFCON</span> <span class="dim">(estimate)</span></h1>
+  <p class="sub">Open-source estimate by Sentinel Safeguard. The
+  actual DEFCON level is classified — this is not the official
+  level. What follows is a disciplined estimate built only from
+  public signals, scored the same way every hour, with every
+  move it makes logged in public below.</p>
+  <p id="geo-panel-level">{% if geo_defcon %}Estimated DEFCON <strong class="tl-lvl tl-lvl-{{ 6 - geo_defcon.defcon }}">{{ geo_defcon.defcon }} &mdash; {{ geo_defcon.name }}</strong> &middot; pressure {{ geo_defcon.pressure }} &middot; updated <time datetime="{{ geo_defcon.computed_at }}">{{ geo_defcon.computed_at }}</time>{% else %}Being computed &mdash; the first estimate lands once the geopolitical feed has reported in.{% endif %}</p>
+  {% if geo_pending %}<p class="dim" id="geo-pending">A move to DEFCON {{ geo_pending.defcon }} has been seen {{ geo_pending.count }} time(s) and is awaiting confirmation — the estimate does not move on a single reading.</p>{% endif %}
+</section>
+<section class="tl-panel rv">
+  <h2>What moved it</h2>
+  <div id="geo-drivers">
+    {% if geo_defcon %}
+    <ul class="tl-input-list">
+      <li>Family A — conflict intensity: <b>{{ geo_defcon.inputs.counts.A }}</b> stories &middot; score {{ geo_defcon.families["A"] }} of 3</li>
+      <li>Family B — U.S. involvement and force posture: <b>{{ geo_defcon.inputs.counts.B }}</b> stories &middot; score {{ geo_defcon.families["B"] }} of 3</li>
+      <li>Family C — nuclear rhetoric and doctrine: <b>{{ geo_defcon.inputs.counts.C }}</b> stories &middot; score {{ geo_defcon.families["C"] }} of 3</li>
+      <li>Family D — Doomsday Clock (Bulletin of the Atomic Scientists): <b>{{ geo_defcon.clock_seconds }} seconds to midnight</b> ({{ geo_defcon.clock_source }}) &middot; score {{ geo_defcon.families["D"] }} of 2</li>
+      <li>Family E — GDELT conflict-volume trend: <b>{{ geo_defcon.gdelt }}</b>{% if geo_defcon.families["E"] is not none %} &middot; score {{ geo_defcon.families["E"] }} of 2{% endif %}</li>
+      <li>Elevated families right now: <b>{{ geo_defcon.elevated|join(", ") if geo_defcon.elevated else "none" }}</b> &middot; total pressure <b>{{ geo_defcon.pressure }}</b></li>
+    </ul>
+    {% else %}
+    <p class="dim">Signal detail appears with the first computed estimate.</p>
+    {% endif %}
+  </div>
+</section>
+<section class="tl-panel rv">
+  <h2>How this estimate is set</h2>
+  <p>Open-source estimate by Sentinel Safeguard. The actual
+  DEFCON level is classified — this is not the official level.
+  Five signal families are scored from public sources every
+  hour. Family A, conflict intensity, counts geopolitical
+  headlines carrying war, strike, invasion, ceasefire, and
+  front-line language (5 or more earns 3 points, 3&ndash;4 earns
+  2, 1&ndash;2 earns 1). Family B, U.S. involvement and force
+  posture, counts headlines about U.S. strikes, troops, carriers,
+  deployments, NATO, and military aid (6 or more earns 3,
+  3&ndash;5 earns 2, 1&ndash;2 earns 1). Family C, nuclear
+  rhetoric and doctrine, counts nuclear, warhead, ICBM, and
+  ballistic-missile language (4 or more earns 3, 2&ndash;3 earns
+  2, 1 earns 1). Family D is the slow anchor: the Bulletin of
+  the Atomic Scientists&rsquo; Doomsday Clock — at 90 seconds
+  to midnight or less it earns 2 points, at 91&ndash;120 seconds
+  1 point. Family E, a GDELT conflict-volume trend, is
+  opportunistic: when GDELT answers, a rising volume adds up to
+  2 points; when it does not, the estimate computes without it,
+  and E can never count as an elevated family — a single-source
+  volume metric informs pressure but cannot concur in a
+  triangulation.</p>
+  <p>The family scores add to a pressure total. The candidate
+  level follows fixed rules: DEFCON 1 requires an imminent-use
+  signal, pressure of 9 or more, and at least three elevated
+  families; DEFCON 2 requires a direct-confrontation signal,
+  pressure of 7 or more, and at least three elevated families;
+  DEFCON 3 requires pressure of 5 or more and at least two
+  elevated families; pressure of 3 or more is DEFCON 4; anything
+  quieter is DEFCON 5. A family is elevated at score 2 or more
+  (for the clock, exactly its closest-ever band). That is the
+  triangulation rule: no single feed can move this level alone —
+  independent families have to concur.</p>
+  <p>The estimate also has inertia, because the real system
+  dwells instead of jittering. A candidate level must repeat on
+  consecutive hourly evaluations before it applies: two in a row
+  for a move to DEFCON 3, 4, or 5, and three in a row for a move
+  to DEFCON 2 or 1. A reading that reverts clears the pending
+  move. Every applied move is written to the change log below
+  with the exact inputs that drove it — the estimate scores
+  itself in public.</p>
+  <p>Backtest: scored against history, this model puts the 1962
+  Cuban Missile Crisis peak at DEFCON 2, the 1973 Yom Kippur war
+  at DEFCON 3 (pressure alone, with no confrontation flag, does
+  not reach 2 — the actual 1973 move was to 3), September 11 at
+  DEFCON 3, the post-2022 Ukraine era at DEFCON 3, and 1990s
+  peacetime at DEFCON 5. Those anchors are pinned in the
+  site&rsquo;s tests, so a future change that breaks one fails
+  the build instead of quietly rewriting history.</p>
+</section>
+<section class="tl-panel rv">
+  <h2>Change log</h2>
+  <div id="geo-changes">
+    {% if geo_changes %}
+    <ul class="tl-input-list">
+      {% for c in geo_changes|reverse %}
+      <li>{{ c.ts }} &middot; DEFCON {{ c.from }} &rarr; <b>{{ c.to }}</b> &middot; pressure {{ c.pressure }} &middot; families A {{ c.families["A"] }}, B {{ c.families["B"] }}, C {{ c.families["C"] }}, D {{ c.families["D"] }}, E {{ c.families["E"] }} &middot; elevated: {{ c.elevated|join(", ") }}</li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="dim">No applied changes yet — the log fills as
+    evaluations confirm moves.</p>
+    {% endif %}
+  </div>
+</section>
+<section class="tl-panel rv">
+  <h2>Recent days</h2>
+  <ul id="geo-history" class="tl-history">
+    {% for h in geo_history[-14:] %}
+    <li>{{ h.date }} <span class="tl-lvl tl-lvl-{{ 6 - h.defcon }}">{{ h.defcon }}</span></li>
+    {% else %}
+    <li class="dim">No history yet.</li>
+    {% endfor %}
+  </ul>
+  <ul class="tl-input-list">
+    {% for h in geo_history[-14:] %}
+    <li>{{ h.date }} &middot; estimated DEFCON {{ h.defcon }} &middot; pressure {{ h.pressure }}</li>
+    {% endfor %}
+  </ul>
+</section>
+{% include "_reader_cta.html" %}
+{% endblock %}

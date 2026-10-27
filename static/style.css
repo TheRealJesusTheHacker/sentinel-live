@@ -94,7 +94,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 2320px) and (min-width: 861px) {
+@media (max-width: 2620px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -160,7 +160,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      band now reaches 2320px (+75 over need, in line with the
      earlier margins); the row at band metrics stays far
      inside the band, and above 2320px the base regime needs
-     only ~2245px — every width is covered with slack. */
+     only ~2245px — every width is covered with slack.
+     DEFCON RESHAPE (2026-10-27): Cyber DEFCON and Geopolitical
+     DEFCON made the nav eighteen destinations plus the Contact
+     pill. Estimated the same way (the two links add ~300px at
+     the nav's metrics): nav content ~2229px and the header's
+     natural need ~2545px — past the 2320px top edge, the same
+     lapse shape as every addition before it. The band now
+     reaches 2620px (+75 over need, in line with the earlier
+     margins); the row at band metrics stays far inside the
+     band, and above 2620px the base regime needs only ~2545px
+     — every width is covered with slack. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }
@@ -771,7 +781,7 @@ section { margin-bottom: 1.5em; }
 .dly-12 { --d: .12s; }
 .dly-18 { --d: .18s; }
 
-/* Sentinel Threat Level + Internet Weather 2026-10-27: the
+/* DEFCON badges (formerly Threat Level) + Internet Weather 2026-10-27: the
    site-wide badge band under the header, the level chips, the
    Operations/homepage methodology panel, and the weather bars'
    signal labels. Colors are the existing palette only: the two
