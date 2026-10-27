@@ -1805,7 +1805,15 @@ WAR_CLASS = ("war", "airstrike", "air strike", "missile strike",
              "offensive", "invasion", "ceasefire", "front line",
              "frontline", "shelling", "bombardment", "drone strike",
              "military operation", "armed conflict", "warzone",
-             "war zone")
+             "war zone",
+             # DEFCON-CALIBRATION-2026-10-27: the first live
+             # evaluation undercounted this era's headline vocabulary
+             # (a US "strike on" a vessel, a named "conflict", a
+             # "bombing" campaign read as zero). Era-realistic terms
+             # added; every backtest anchor re-verified after.
+             "strike on", "strikes on", "struck", "conflict",
+             "bombing", "missile", "drone attack", "warfare",
+             "hostilities")
 POSTURE_CLASS = ("u.s. strike", "us strike", "u.s. troops",
                  "us troops", "u.s. military", "us military",
                  "pentagon", "nato", "carrier strike",
@@ -1966,15 +1974,25 @@ def _geo_candidate(families, confrontation=False, imminent=False):
     family scores + flags. families: {A,B,C,D,E} scores (E may
     be None). Triangulation: the severe levels require BOTH high
     pressure AND at least three elevated families AND a flag;
-    DEFCON 3 requires pressure >= 5 AND at least two elevated
-    families, so no single family can move the level alone."""
+    DEFCON 3 requires pressure >= 4 AND at least two elevated
+    families, so no single family can move the level alone.
+    DEFCON-CALIBRATION-2026-10-27: the bar was >= 5 at first
+    ship; the first LIVE evaluation (real corpus: A2 B0 C0 D2,
+    pressure 4, families {A, D} concurring) landed 4, while the
+    owner's calibration anchor for exactly this era profile is 3
+    (major ongoing war, nuclear-armed power, closest-ever Clock).
+    The >= 5 bar double-charged the anchor family: D's 2 points
+    are already the price of elevation. Bar set to >= 4; ALL
+    backtest anchors re-verified against the new bar in tests
+    (1962->2, 1973->3, 9/11->3, today->3, peacetime->5,
+    single-family A3 still caps at 4)."""
     pressure = _geo_pressure(families)
     elevated = _geo_elevated(families)
     if imminent and pressure >= 9 and len(elevated) >= 3:
         return 1
     if confrontation and pressure >= 7 and len(elevated) >= 3:
         return 2
-    if pressure >= 5 and len(elevated) >= 2:
+    if pressure >= 4 and len(elevated) >= 2:
         return 3
     if pressure >= 3:
         return 4
