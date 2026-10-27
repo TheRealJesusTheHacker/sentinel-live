@@ -56,6 +56,44 @@
     </article>
   </div>
 </section>
+<section id="threat-level" class="tl-panel rv">
+  <h2>Sentinel Threat Level</h2>
+  <p id="tl-panel-level">{% if threat_level %}Level <strong class="tl-lvl tl-lvl-{{ threat_level.level }}">{{ threat_level.level }} &mdash; {{ threat_level.name }}</strong> &middot; score {{ threat_level.score }} of 7 &middot; updated <time datetime="{{ threat_level.computed_at }}">{{ threat_level.computed_at }}</time>{% else %}Being computed &mdash; the first level lands once the feeds below have reported in.{% endif %}</p>
+  <p>How this is set: the level is computed from three public
+  inputs, and nothing else. First, how many vulnerabilities CISA
+  added to its Known Exploited Vulnerabilities catalog in the
+  last 7 days (18 or more earns 3 points, 10&ndash;17 earns 2,
+  4&ndash;9 earns 1). Second, how many Threat Watch and Patch
+  Alert items Sentinel News published in the last 7 days (45 or
+  more earns 2 points, 25&ndash;44 earns 1). Third, how many
+  attacking sources the DShield sensor network counted today
+  (260,000 or more earns 2 points, 180,000 or more earns 1).
+  The points add to a score of 0&ndash;7: 0&ndash;1 is level 1
+  ROUTINE, 2&ndash;3 is level 2 GUARDED, 4&ndash;5 is level 3
+  ELEVATED, 6 is level 4 HIGH, and 7 is level 5 SEVERE. There
+  is no hand-tuning &mdash; the number is the number, and the
+  inputs below are the exact values it came from.</p>
+  <div id="tl-inputs">
+    {% if threat_level %}
+    <ul class="tl-input-list">
+      <li>Known exploited vulnerabilities added in the last 7 days (CISA KEV): <b>{{ threat_level.inputs.kev_added_7d }}</b> &middot; {{ threat_level.parts.kev_points }} points</li>
+      <li>Sentinel News Threat Watch items in the last 7 days: <b>{{ threat_level.inputs.news_threat_watch_7d }}</b></li>
+      <li>Sentinel News Patch Alert items in the last 7 days: <b>{{ threat_level.inputs.news_patch_alert_7d }}</b> &middot; news total {{ threat_level.parts.news_points }} points</li>
+      <li>Attacking sources today (DShield): <b>{{ threat_level.inputs.dshield_sources_today }}</b> &middot; {{ threat_level.parts.feed_points }} points</li>
+    </ul>
+    {% else %}
+    <p class="dim">Inputs appear with the first computed level.</p>
+    {% endif %}
+  </div>
+  <h3>Recent days</h3>
+  <ul id="tl-history" class="tl-history">
+    {% for h in threat_history[-14:] %}
+    <li>{{ h.date }} <span class="tl-lvl tl-lvl-{{ h.level }}">{{ h.level }}</span></li>
+    {% else %}
+    <li class="dim">No history yet.</li>
+    {% endfor %}
+  </ul>
+</section>
 {% endblock %}
 {% block scripts %}
 <script src="/static/js/ops.js"></script>

@@ -122,7 +122,10 @@ def test_stylesheet_version_query_bumped(app_mod):
     # the Sentinel News nav promotion (2026-10-26) — the header
     # band widening to 2040px for its own tab. 20261027-1 is the
     # CSP pass (legend dots + reveal delays became classes).
-    assert "/static/style.css?v=20261027-1" in resp.text
+    # 20261027-2 is the Threat Level + Internet Weather build
+    # (2026-10-27, owner order): tl-band/tl-panel/weather styles
+    # and the nav band widening to 2320px for the two new tabs.
+    assert "/static/style.css?v=20261027-2" in resp.text
 
 
 def test_header_uses_emblem_mark_not_full_poster(app_mod):

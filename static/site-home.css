@@ -164,3 +164,18 @@
 .dly-07 { --d: .07s; }
 .dly-14 { --d: .14s; }
 section.faq-tight { padding-top: 0; }
+
+/* Sentinel Threat Level 2026-10-27: badge band + level chips
+   (palette: the existing greens, map amber/orange, danger red). */
+.tl-band{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;text-align:center;padding:10px 16px;background:#0c100d;color:#d7e0d8;border-bottom:1px solid #1d2b20;font-family:"IBM Plex Mono",monospace;font-size:.82rem;letter-spacing:.04em}
+.tl-band a{color:#00e676;font-weight:700}
+.tl-lvl{display:inline-block;padding:2px 10px;border-radius:999px;font-weight:800;color:#04120a;background:#00e676;white-space:nowrap}
+.tl-lvl-1{background:#00e676}.tl-lvl-2{background:#00c163}.tl-lvl-3{background:#ffb300}.tl-lvl-4{background:#ff7b33}.tl-lvl-5{background:#ff4444;color:#fff}
+.tl-panel{padding:clamp(64px,8vw,104px) 0 0}
+.tl-panel h2{margin:0 0 18px;font-size:clamp(2rem,4vw,3.2rem);line-height:1;letter-spacing:-.04em}
+.tl-panel p{max-width:760px;color:var(--muted);line-height:1.65}
+.tl-panel #tl-panel-level{color:var(--ink);font-size:1.05rem;font-weight:680}
+.tl-input-list{margin:10px 0;padding-left:20px;line-height:1.65;color:var(--muted)}
+.tl-input-list b{color:var(--ink)}
+.tl-history{list-style:none;display:flex;flex-wrap:wrap;gap:8px 14px;margin:10px 0 0;padding:0;font-family:"IBM Plex Mono",monospace;font-size:.85rem}
+.tl-history li{display:inline-flex;align-items:center;gap:7px}

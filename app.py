@@ -81,7 +81,9 @@ for _d in (DATA_DIR, LOG_DIR):
 DEFAULT_CONFIG = {
     "server": {"host": "127.0.0.1", "port": 8443},
     "feeds": {"threat_refresh_minutes": 5, "geo_refresh_minutes": 15,
-              "news_refresh_minutes": 30, "request_timeout_seconds": 20},
+              "news_refresh_minutes": 30, "request_timeout_seconds": 20,
+              # Internet Weather 2026-10-27: IODA + RIPEstat refresh.
+              "weather_refresh_minutes": 15},
     "flight_api": {"provider": "aviationstack", "api_key": ""},
     "threat_feeds": {"abuse_ch_auth_key": ""},  # optional free key from https://auth.abuse.ch/
     "tunnel": {"enabled": False,
@@ -236,7 +238,9 @@ def _validate_config_schema():
     fcfg = config.get("feeds")
     if isinstance(fcfg, dict):
         for _key in ("threat_refresh_minutes", "geo_refresh_minutes",
-                     "news_refresh_minutes", "request_timeout_seconds"):
+                     "news_refresh_minutes", "request_timeout_seconds",
+                     # Internet Weather 2026-10-27: same validation.
+                     "weather_refresh_minutes"):
             _v = fcfg.get(_key)
             if isinstance(_v, bool) or not isinstance(_v, int):
                 log.warning("config: feeds.%s invalid (%r); using default %r",
@@ -569,7 +573,9 @@ _VISITOR_PUBLIC_PATHS = {"/", "/operations", "/threat-map", "/geopolitical",
                          "/who-we-protect", "/how-it-works", "/contact",
                          "/insights", "/privacy", "/assessment", "/tools",
                          "/training/phishing", "/faq", "/disclosure",
-                         "/availability", "/sentinel-news"}
+                         "/availability", "/sentinel-news",
+                         # New pages 2026-10-27 (owner order).
+                         "/kc-scam-alerts", "/internet-weather"}
 _VISITOR_BOT_TOKENS = ("bot", "crawler", "spider", "curl", "wget",
                        "python-requests", "headless", "uptime")
 _visitor_prune_state = {"last": 0.0}
@@ -813,6 +819,18 @@ store = {
     "geo": {"updated": None, "status": "starting", "items": [], "hotspots": [], "error": None},
     "news": {"updated": None, "status": "starting", "sections": {}, "error": None},
     "briefing": None,
+    # Internet Weather 2026-10-27: IODA + RIPEstat store.
+    "weather": {"updated": None, "status": "starting",
+                "window_hours": 24,
+                "sources": {"ioda": "starting", "ripestat": "starting"},
+                "totals": {"countries_affected": 0, "outage_events": 0,
+                           "alerts_24h": 0},
+                "countries": [], "events": [], "error": None},
+    # Sentinel Threat Level 2026-10-27: CISA KEV counts + the
+    # computed level (dict) or None until the first compute lands.
+    "kev": {"updated": None, "status": "starting", "total": 0,
+            "added_7d": 0, "added_today": 0, "added_dates": []},
+    "threat_level": None,
 }
 
 # ------------------------------------------------------------------ sqlite
@@ -1087,6 +1105,12 @@ async def _startup():
     asyncio.create_task(_refresh_loop("news", fcfg["news_refresh_minutes"],
                                       feeds.fetch_news_sections,
                                       config["rss"]["news_sections"], to))
+    # Internet Weather + KEV + Threat Level 2026-10-27.
+    asyncio.create_task(_refresh_loop("weather",
+                                      fcfg["weather_refresh_minutes"],
+                                      feeds.fetch_internet_weather, to))
+    asyncio.create_task(_refresh_loop("kev", 60, feeds.fetch_kev, to))
+    asyncio.create_task(_threat_level_loop())
     # BH-2026-10-23 (L-1): turnstile enabled with no secret configured
     # silently no-ops the form bot check — say so loudly at startup
     # instead of letting the site look protected when it is not.
@@ -1269,6 +1293,8 @@ def _news_parse_item(raw):
                                     day.year),
         "tag": tag, "title": title, "summary": summary,
         "html": _insight_body_html(body),
+        # KC Scam Alerts 2026-10-27: geographic scope of the item.
+        "scope": str(raw.get("scope") or "").strip(),
         "source_name": str(raw.get("sourceName") or "").strip(),
         "source_url": source_url,
         "state": str(raw.get("state") or ""),
@@ -1375,6 +1401,14 @@ async def _news_push_payload(request: Request):
         item["body"] = body if isinstance(body, str) else ""
         if len(item["body"]) > 60000:
             raise HTTPException(400, "body is too long.")
+    # KC Scam Alerts 2026-10-27: scope, when sent, must be one of
+    # the three geographic scopes.
+    if "scope" in raw:
+        scope = str(raw.get("scope") or "").strip()
+        if scope not in ("World", "National", "Kansas City"):
+            raise HTTPException(
+                400, "scope must be World, National, or Kansas City.")
+        item["scope"] = scope
     state = str(raw.get("state") or "").strip()
     if state not in ("draft", "published"):
         raise HTTPException(400, "state must be draft or published.")
@@ -1444,6 +1478,11 @@ async def internal_news_upsert(request: Request):
         raise HTTPException(400, "date is required.")
     if item.get("tag") not in _NEWS_TAGS:
         raise HTTPException(400, "tag is not a Sentinel News tag.")
+    # KC Scam Alerts 2026-10-27: a stored scope must stay valid.
+    if item.get("scope") and item.get("scope") not in (
+            "World", "National", "Kansas City"):
+        raise HTTPException(
+            400, "scope must be World, National, or Kansas City.")
     if not item.get("title") or not item.get("summary"):
         raise HTTPException(400, "title and summary are required.")
     src = str(item.get("sourceUrl") or "")
@@ -1474,9 +1513,223 @@ async def internal_news_delete(request: Request):
     return {"ok": True, "slug": slug, "deleted": deleted}
 
 
+
+# ------------------------------------------------------- threat level
+# Sentinel Threat Level 2026-10-27 (owner order): a site-wide level
+# computed ONLY from three public inputs — no hand-tuning, ever.
+#   KEV points:  CISA KEV additions in the trailing 7 days —
+#                >=18 -> 3, 10-17 -> 2, 4-9 -> 1, else 0.
+#   News points: Sentinel News Threat Watch + Patch Alert items in
+#                the trailing 7 days — >=45 -> 2, 25-44 -> 1, else 0.
+#   Feed points: DShield attacking sources today —
+#                >=260000 -> 2, >=180000 -> 1, else 0.
+# score = sum (0-7). Level: 0-1 -> 1 ROUTINE, 2-3 -> 2 GUARDED,
+# 4-5 -> 3 ELEVATED, 6 -> 4 HIGH, 7 -> 5 SEVERE.
+_THREAT_LEVEL_NAMES = {1: "ROUTINE", 2: "GUARDED", 3: "ELEVATED",
+                       4: "HIGH", 5: "SEVERE"}
+
+
+def _threat_level_path():
+    """The persistence file, resolved from DATA_DIR at call time
+    so tests can point DATA_DIR at a scratch directory."""
+    return DATA_DIR / "threat_level.json"
+
+
+def _threat_level_score(kev7, tw7, pa7, sources_today):
+    """Pure scoring — the formula above, nothing else. Returns
+    (score, parts) where parts carries each input's points."""
+    try:
+        kev7 = int(kev7 or 0)
+    except (TypeError, ValueError):
+        kev7 = 0
+    try:
+        news_total = int(tw7 or 0) + int(pa7 or 0)
+    except (TypeError, ValueError):
+        news_total = 0
+    try:
+        sources_today = int(sources_today or 0)
+    except (TypeError, ValueError):
+        sources_today = 0
+    kev_points = 3 if kev7 >= 18 else 2 if kev7 >= 10 else \
+        1 if kev7 >= 4 else 0
+    news_points = 2 if news_total >= 45 else 1 if news_total >= 25 else 0
+    feed_points = 2 if sources_today >= 260000 else \
+        1 if sources_today >= 180000 else 0
+    parts = {"kev_points": kev_points, "news_points": news_points,
+             "feed_points": feed_points}
+    return kev_points + news_points + feed_points, parts
+
+
+def _threat_level_for_score(score):
+    if score <= 1:
+        return 1
+    if score <= 3:
+        return 2
+    if score <= 5:
+        return 3
+    if score == 6:
+        return 4
+    return 5
+
+
+def _load_threat_level_file(path=None):
+    """The persisted {current, history} dict, or an empty shape.
+    Never raises — a missing or malformed file is 'no level yet'."""
+    path = path or _threat_level_path()
+    try:
+        data = json.loads(Path(path).read_text(encoding="utf-8"))
+        if isinstance(data, dict):
+            current = data.get("current")
+            history = data.get("history")
+            return {"current": current if isinstance(current, dict)
+                    else None,
+                    "history": history if isinstance(history, list)
+                    else []}
+    except Exception:
+        pass
+    return {"current": None, "history": []}
+
+
+def _get_threat_level():
+    """Cheap, never-raising getter for templates: the in-memory
+    current level, else the file-loaded current, else None."""
+    try:
+        cur = store.get("threat_level")
+        if isinstance(cur, dict) and cur.get("level"):
+            return cur
+        return _load_threat_level_file()["current"]
+    except Exception:
+        return None
+
+
+def _get_threat_history():
+    try:
+        return _load_threat_level_file()["history"]
+    except Exception:
+        return []
+
+
+def _chicago_today():
+    return datetime.now(timezone.utc).astimezone(_CHICAGO_TZ).date()
+
+
+def _compute_threat_level(path=None):
+    """Compute the current level from the live stores, persist it
+    (atomic tmp+rename, today's snapshot upserted into a history
+    trimmed to the last 30 days), and set store["threat_level"].
+    When KEV has not landed (status not ok) an existing current
+    level is kept unchanged; with none, returns None — the badge
+    shows 'being computed' honestly until the first compute."""
+    path = Path(path) if path else _threat_level_path()
+    existing = _load_threat_level_file(path)
+    previous = store.get("threat_level")
+    if not (isinstance(previous, dict) and previous.get("level")):
+        previous = existing["current"]
+    kev = store.get("kev") or {}
+    if not isinstance(kev, dict) or kev.get("status") != "ok":
+        if previous:
+            store["threat_level"] = previous
+            return previous
+        return None
+    today = _chicago_today()
+    start_ord = today.toordinal() - 6
+    tw7 = pa7 = 0
+    for item in _load_news():
+        try:
+            day = datetime.strptime(
+                str(item.get("date") or ""), "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        if not (start_ord <= day.toordinal() <= today.toordinal()):
+            continue
+        if item.get("tag") == "Threat Watch":
+            tw7 += 1
+        elif item.get("tag") == "Patch Alert":
+            pa7 += 1
+    try:
+        sources_today = int(
+            (store.get("threat") or {}).get("sources_today") or 0)
+    except (TypeError, ValueError):
+        sources_today = 0
+    try:
+        kev7 = int(kev.get("added_7d") or 0)
+    except (TypeError, ValueError):
+        kev7 = 0
+    score, parts = _threat_level_score(kev7, tw7, pa7, sources_today)
+    level = _threat_level_for_score(score)
+    inputs = {"kev_added_7d": kev7, "news_threat_watch_7d": tw7,
+              "news_patch_alert_7d": pa7,
+              "dshield_sources_today": sources_today}
+    current = {"level": level, "name": _THREAT_LEVEL_NAMES[level],
+               "score": score, "parts": parts, "inputs": inputs,
+               "computed_at": _utcnow()}
+    date_str = today.isoformat()
+    cutoff_ord = today.toordinal() - 29
+    history = []
+    for entry in existing["history"]:
+        if not isinstance(entry, dict):
+            continue
+        try:
+            d_ord = datetime.strptime(
+                str(entry.get("date") or ""), "%Y-%m-%d").date().toordinal()
+        except (TypeError, ValueError):
+            continue
+        if d_ord >= cutoff_ord and entry.get("date") != date_str:
+            history.append(entry)
+    history.append({"date": date_str, "level": level, "score": score,
+                    "inputs": inputs})
+    history.sort(key=lambda e: str(e.get("date") or ""))
+    history = history[-30:]
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        tmp = path.with_name(path.name + ".tmp")
+        tmp.write_text(json.dumps({"current": current,
+                                   "history": history},
+                                  indent=1, sort_keys=True),
+                       encoding="utf-8")
+        os.replace(tmp, path)
+    except Exception as e:
+        log.warning("threat level persist failed: %s",
+                    type(e).__name__)
+    store["threat_level"] = current
+    return current
+
+
+async def _threat_level_loop():
+    """Hourly threat-level compute. The first run waits ~25s so
+    the KEV/threat feeds have a chance to land; after that the
+    loop recomputes every 60 minutes. _compute_threat_level keeps
+    the previous level when KEV is unavailable, so an early run
+    with no KEV yet costs nothing."""
+    await asyncio.sleep(25)
+    while True:
+        try:
+            _compute_threat_level()
+        except Exception:
+            log.exception("threat level compute failed")
+        await asyncio.sleep(60 * 60)
+
+
+# ------------------------------------------------------- kc scam alerts
+def _kc_scam_alerts():
+    """KC Scam Alerts 2026-10-27: published Sentinel News items
+    scoped to Kansas City with the Threat Watch tag — nothing
+    else. Drafts never reach _load_news, so they can never leak
+    here; a KC Patch Alert and a National Threat Watch are both
+    deliberately excluded."""
+    return [i for i in _load_news()
+            if i.get("scope") == "Kansas City"
+            and i.get("tag") == "Threat Watch"]
+
+
 # ------------------------------------------------------------------ pages
 def _ctx(request: Request, **kw):
-    base = {"request": request, "now": _utcnow()}
+    base = {"request": request, "now": _utcnow(),
+            # Threat Level 2026-10-27: every app page carries the
+            # badge band (base.html) and the Operations panel reads
+            # the history; both getters are cheap and never raise.
+            "threat_level": _get_threat_level(),
+            "threat_history": _get_threat_history()}
     base.update(kw)
     return base
 
@@ -1709,6 +1962,55 @@ async def sentinel_news_item(request: Request, slug: str):
     raise HTTPException(404, "Not found.")
 
 
+@app.get("/kc-scam-alerts/feed.xml")
+async def kc_scam_alerts_feed(request: Request):
+    # KC Scam Alerts 2026-10-27: the KC feed, built from the same
+    # _kc_scam_alerts() data the page renders — one source, so the
+    # feed can never drift from the page. Registered before the
+    # page route for symmetry with the Sentinel News feed.
+    from email.utils import format_datetime as _fmt_dt
+    published = _kc_scam_alerts()
+    items = []
+    for item in published:
+        day = datetime.strptime(item["date"], "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        items.append(
+            "<item><title>%s</title><link>%s%s</link>"
+            "<guid isPermaLink=\"true\">%s%s</guid>"
+            "<pubDate>%s</pubDate><category>%s</category>"
+            "<description>%s</description></item>"
+            % (_xml_escape(item["title"]), _SITE_BASE, item["url"],
+               _SITE_BASE, item["url"], _fmt_dt(day),
+               _xml_escape(item["tag"]),
+               _xml_escape(item["summary"])))
+    if published:
+        latest = datetime.strptime(published[0]["date"],
+                                   "%Y-%m-%d").replace(
+            tzinfo=timezone.utc)
+        built = "<lastBuildDate>%s</lastBuildDate>" % _fmt_dt(latest)
+    else:
+        built = ""
+    xml = ('<?xml version="1.0" encoding="UTF-8"?>\n'
+           '<rss version="2.0"><channel>'
+           "<title>Sentinel Safeguard \u2014 KC Scam Alerts</title>"
+           "<link>%s/kc-scam-alerts</link>"
+           "<description>Kansas City metro scam and fraud alerts "
+           "from Sentinel Safeguard.</description>"
+           "<language>en-us</language>%s%s</channel></rss>"
+           % (_SITE_BASE, built, "".join(items)))
+    return Response(content=xml, media_type="application/rss+xml")
+
+
+@app.get("/kc-scam-alerts", response_class=HTMLResponse)
+async def kc_scam_alerts(request: Request):
+    # KC Scam Alerts 2026-10-27: Kansas City metro scam/fraud
+    # alerts — the Kansas City-scoped Threat Watch items from
+    # Sentinel News, on their own page.
+    return templates.TemplateResponse(
+        request, "kc_scam_alerts.html",
+        _ctx(request, items=_kc_scam_alerts()))
+
+
 @app.get("/privacy", response_class=HTMLResponse)
 async def privacy(request: Request):
     # Privacy (owner order 2026-10-25): the site's data handling
@@ -1911,10 +2213,11 @@ _SITEMAP_PATHS = ["/", "/about", "/services",
                   "/who-we-protect",
                   "/how-it-works", "/insights", "/privacy",
                   "/operations", "/threat-map", "/geopolitical",
-                  "/flights", "/contact", "/report-issue",
+                  "/flights", "/internet-weather",
+                  "/contact", "/report-issue",
                   "/assessment", "/tools", "/training/phishing",
                   "/faq", "/disclosure", "/availability",
-                  "/sentinel-news"]
+                  "/sentinel-news", "/kc-scam-alerts"]
 
 
 @app.get("/sitemap.xml")
@@ -1989,6 +2292,15 @@ async def threat_map(request: Request):
     return templates.TemplateResponse(request, "threat_map.html", _ctx(request))
 
 
+@app.get("/internet-weather", response_class=HTMLResponse)
+async def internet_weather(request: Request):
+    # Internet Weather 2026-10-27: country-level outage picture
+    # from IODA + RIPEstat (see feeds.fetch_internet_weather);
+    # the page's script reads /api/internet-weather.
+    return templates.TemplateResponse(
+        request, "internet_weather.html", _ctx(request))
+
+
 @app.get("/geopolitical", response_class=HTMLResponse)
 async def geopolitical(request: Request):
     return templates.TemplateResponse(request, "geopolitical.html", _ctx(request))
@@ -2040,8 +2352,11 @@ async def health(request: Request):
     now = datetime.now(timezone.utc)
     return {"ok": True, "time": now.isoformat(timespec="seconds"), "frozen": FROZEN,
             "uptime_seconds": int((now - STARTED_AT).total_seconds()) if STARTED_AT else None,
+            # threat_level is a dict-or-None store entry (2026-10-27),
+            # not a feed dict — only dict stores report here.
             "feeds": {k: {"updated": v.get("updated"), "status": v.get("status")}
-                      for k, v in store.items() if k != "briefing"}}
+                      for k, v in store.items()
+                      if k != "briefing" and isinstance(v, dict)}}
 
 
 @app.get("/status", response_class=HTMLResponse)
@@ -2053,7 +2368,7 @@ async def status_page(request: Request):
     uptime = int((now - STARTED_AT).total_seconds()) if STARTED_AT else 0
     feeds = []
     for k, v in store.items():
-        if k == "briefing":
+        if k == "briefing" or not isinstance(v, dict):
             continue
         feeds.append({"name": k, "updated": v.get("updated"),
                       "status": v.get("status", "unknown")})
@@ -2072,6 +2387,27 @@ async def api_threat():
 @app.get("/api/geo-data")
 async def api_geo():
     return JSONResponse(store["geo"])
+
+
+@app.get("/api/internet-weather")
+async def api_internet_weather():
+    return JSONResponse(store["weather"])
+
+
+@app.get("/api/threat-level")
+async def api_threat_level():
+    # Sentinel Threat Level 2026-10-27: the current level plus its
+    # history; until the first compute lands, an honest pending
+    # shape (level null) instead of a fabricated level.
+    current = _get_threat_level()
+    history = _get_threat_history()
+    if not current:
+        return JSONResponse({"level": None, "pending": True,
+                             "history": history})
+    out = dict(current)
+    out["history"] = history
+    out["pending"] = False
+    return JSONResponse(out)
 
 
 _LIVE_DEFAULT_CENTER = (39.1, -94.6)  # Kansas City — the tracker's home view

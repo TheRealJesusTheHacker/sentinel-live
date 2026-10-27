@@ -94,7 +94,7 @@ a:hover { text-decoration: underline; }
 a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
   outline: 2px solid var(--grn); outline-offset: 2px;
 }
-@media (max-width: 2040px) and (min-width: 861px) {
+@media (max-width: 2320px) and (min-width: 861px) {
   /* Phase Two A: the nav gained Operations (8 items) — this band
      tightens a touch more so the single row survives to 861px.
      WWP (2026-10-25): Who We Protect made the nav ten destinations
@@ -149,7 +149,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
      2040px (+75 over need, in line with the HIW/Insights/Privacy
      margins); the row at band metrics is ~1418px, far inside
      the band, and above 2040px the base regime needs only
-     ~1965px — every width is covered with slack. */
+     ~1965px — every width is covered with slack.
+     NEW PAGES (2026-10-27): KC Scam Alerts and Internet
+     Weather made the nav sixteen destinations plus the
+     Contact pill. Estimated the same way (the two links add
+     ~280px at the nav's metrics, cross-checked against this
+     series' census increments): nav content ~1929px and the
+     header's natural need ~2245px — past the 2040px top edge,
+     the same lapse shape as every addition before it. The
+     band now reaches 2320px (+75 over need, in line with the
+     earlier margins); the row at band metrics stays far
+     inside the band, and above 2320px the base regime needs
+     only ~2245px — every width is covered with slack. */
   .topbar { gap: .5em; padding: .55em .8em; }
   .brand-logo { height: 42px; }
   .brand-name { font-size: .98em; }
@@ -759,3 +770,46 @@ section { margin-bottom: 1.5em; }
 .dly-06 { --d: .06s; }
 .dly-12 { --d: .12s; }
 .dly-18 { --d: .18s; }
+
+/* Sentinel Threat Level + Internet Weather 2026-10-27: the
+   site-wide badge band under the header, the level chips, the
+   Operations/homepage methodology panel, and the weather bars'
+   signal labels. Colors are the existing palette only: the two
+   greens for levels 1-2, the map's amber for 3, its orange for
+   4, and the shared danger red for 5. */
+.tl-band {
+  display: flex; align-items: center; justify-content: center;
+  gap: .45em; flex-wrap: wrap; text-align: center;
+  padding: .5em 1.2em; background: var(--panel);
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono); font-size: .82em;
+  letter-spacing: .04em; color: var(--txt);
+}
+.tl-band a { font-weight: 700; }
+.tl-lvl {
+  display: inline-block; padding: .12em .65em; border-radius: 999px;
+  font-weight: 800; color: #04120a; background: var(--grn);
+  white-space: nowrap;
+}
+.tl-lvl-1 { background: #00e676; }
+.tl-lvl-2 { background: #00c163; }
+.tl-lvl-3 { background: #ffb300; }
+.tl-lvl-4 { background: #ff7b33; }
+.tl-lvl-5 { background: #ff4444; color: #fff; }
+.tl-panel {
+  background: var(--surf); border: 1px solid var(--line);
+  border-radius: var(--r-m); padding: 1.2em 1.4em;
+  box-shadow: var(--shadow-1); margin-top: 2em;
+}
+.tl-panel h2 { margin-top: 0; }
+.tl-input-list { margin: .6em 0; padding-left: 1.3em; line-height: 1.65; }
+.tl-input-list b { color: var(--grn); }
+.tl-history {
+  list-style: none; display: flex; flex-wrap: wrap; gap: .5em .9em;
+  margin: .6em 0 0; padding: 0; font-family: var(--font-mono);
+  font-size: .85em;
+}
+.tl-history li { display: inline-flex; align-items: center; gap: .45em; }
+/* Internet Weather: the bars list carries a signal label after
+   the count (the .bars language above does the rest). */
+.bars li em { color: var(--dim); font-style: normal; font-size: .85em; }

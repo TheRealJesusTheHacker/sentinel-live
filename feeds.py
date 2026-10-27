@@ -5,6 +5,7 @@ on failure they return an error status the pages render honestly.
 """
 import asyncio
 import ipaddress
+import math
 import time
 import logging
 import re
@@ -47,6 +48,46 @@ COUNTRY_COORDS = {
     "MU": (-20.3, 57.5), "IS": (64.9, -19.0), "EE": (58.5, 25.0),
     "LV": (56.9, 25.0), "LT": (55.1, 23.9), "GE": (42.3, 43.7),
     "AM": (40.0, 45.0), "AZ": (40.1, 47.5), "KZ2": (48.0, 66.9),
+    # Internet Weather 2026-10-27: IODA reporters missing from the
+    # threat-map table above (owner-ordered additions CK, NF, SS,
+    # GU, BO) plus other plausible country reporters, placed at
+    # country centroids confidently.
+    "CK": (-21.2, -159.8), "NF": (-29.0, 168.0), "SS": (7.9, 29.7),
+    "GU": (13.4, 144.8), "BO": (-17.1, -65.0),
+    "AF": (33.9, 67.7), "AL": (41.2, 20.2), "DZ": (28.0, 1.7),
+    "AO": (-12.5, 17.5), "AS": (-14.3, -170.1), "AW": (12.5, -70.0),
+    "BH": (26.1, 50.6), "BB": (13.2, -59.5), "BZ": (17.2, -88.7),
+    "BJ": (9.3, 2.6), "BT": (27.5, 90.4), "BW": (-22.3, 24.7),
+    "BF": (12.2, -1.7), "BI": (-3.4, 29.9), "CV": (16.0, -24.0),
+    "KH": (12.7, 105.0), "CM": (7.4, 12.4), "CF": (6.6, 20.9),
+    "TD": (15.5, 18.7), "KM": (-11.6, 43.7), "CG": (-0.2, 15.8),
+    "CD": (-4.0, 21.8), "CR": (9.7, -83.8), "CI": (7.5, -5.5),
+    "CU": (21.5, -77.8), "CY": (35.1, 33.4), "DJ": (11.8, 42.6),
+    "DM": (15.4, -61.4), "DO": (18.7, -70.2), "EC": (-1.8, -78.2),
+    "SV": (13.8, -88.9), "GQ": (1.5, 10.3), "ER": (15.2, 39.8),
+    "SZ": (-26.5, 31.5), "ET": (9.1, 40.5), "FJ": (-17.7, 178.1),
+    "GA": (-0.8, 11.6), "GM": (13.4, -16.3), "GD": (12.1, -61.7),
+    "GT": (15.5, -90.3), "GN": (10.0, -12.7), "GW": (11.8, -15.2),
+    "GY": (4.9, -58.9), "HT": (19.1, -72.4), "HN": (15.2, -86.2),
+    "JM": (18.1, -77.3), "JO": (30.6, 36.2), "KW": (29.3, 47.5),
+    "KG": (41.2, 74.8), "LA": (19.9, 102.5), "LB": (33.9, 35.9),
+    "LS": (-29.6, 28.2), "LR": (6.4, -9.4), "LY": (26.3, 17.2),
+    "LU": (49.8, 6.1), "MG": (-18.8, 47.0), "MW": (-13.3, 34.3),
+    "MV": (3.2, 73.2), "ML": (17.6, -4.0), "MT": (35.9, 14.4),
+    "MR": (21.0, -10.9), "MZ": (-17.3, 35.5), "MM": (21.9, 96.0),
+    "NA": (-22.6, 17.1), "NP": (28.4, 84.1), "NI": (13.0, -85.0),
+    "NE": (17.6, 8.1), "MK": (41.6, 21.7), "OM": (21.5, 56.0),
+    "PS": (31.9, 35.2), "PG": (-6.3, 147.0), "PY": (-23.4, -58.4),
+    "PE": (-9.2, -75.0), "QA": (25.3, 51.2), "RW": (-2.0, 30.0),
+    "WS": (-13.8, -172.1), "SN": (14.4, -14.5), "SL": (8.5, -11.8),
+    "SO": (5.2, 46.2), "LK": (7.9, 80.8), "SD": (12.9, 30.2),
+    "SR": (3.9, -56.0), "SY": (35.0, 38.0), "TJ": (38.9, 71.3),
+    "TZ": (-6.4, 34.9), "TG": (8.6, 0.8), "TO": (-20.3, -175.2),
+    "TT": (10.7, -61.4), "TN": (33.9, 9.6), "TM": (39.1, 59.7),
+    "UG": (1.4, 32.4), "UY": (-32.5, -55.8), "UZ": (41.4, 64.6),
+    "VU": (-15.4, 166.9), "VE": (6.4, -66.6), "YE": (15.6, 47.6),
+    "ZM": (-13.1, 27.8), "ZW": (-19.0, 29.9), "ME": (42.7, 19.4),
+    "XK": (42.6, 21.0), "BN": (4.7, 115.0),
 }
 
 # --------------------------------------------------------------- helpers
@@ -732,6 +773,326 @@ AIRPORT_COORDS = {
     "ADD": (8.9779, 38.7993), "CAI": (30.1219, 31.4056),
     "LOS": (6.5774, 3.3212), "ACC": (5.6052, -0.1667),
 }
+
+
+
+# ---------------------------------------------------------- internet weather
+# Internet Weather 2026-10-27: country-level internet outage picture
+# from IODA (Georgia Tech Internet Intelligence Lab, keyless) with
+# RIPEstat routing-stats enrichment for the worst-affected countries.
+# NEVER invents data: a failed source flips its flag in the output
+# and the page says so; if IODA fails entirely the store is an honest
+# error with empty lists.
+
+def _wx_num(v):
+    if isinstance(v, bool):
+        return None
+    if isinstance(v, (int, float)):
+        return float(v)
+    if isinstance(v, str):
+        try:
+            return float(v.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _wx_signals(scores):
+    """Signal names present in an IODA scores object. IODA has used
+    both nested keys ("bgp": {...}) and flat dotted keys
+    ("bgp.median"); accept either shape."""
+    keys = list(scores.keys()) if isinstance(scores, dict) else []
+    out = []
+    for sig, prefixes in (("bgp", ("bgp",)), ("ping", ("ping",)),
+                          ("gtr", ("gtr",))):
+        if any(k == pre or k.startswith(pre + ".") or k.startswith(pre + "-")
+               for k in keys for pre in prefixes):
+            out.append(sig)
+    return out
+
+
+def _wx_entity(raw):
+    """An IODA entity: {'code','name'} dict, or a bare code string."""
+    if isinstance(raw, dict):
+        return (str(raw.get("code") or "").strip().upper(),
+                str(raw.get("name") or "").strip())
+    if isinstance(raw, str):
+        return raw.strip().upper(), ""
+    return "", ""
+
+
+def _wx_ts(v):
+    n = _wx_num(v)
+    if n is not None and n > 0:
+        try:
+            return datetime.fromtimestamp(n, timezone.utc).isoformat(
+                timespec="seconds")
+        except (OverflowError, OSError, ValueError):
+            return ""
+    return str(v or "").strip()
+
+
+def _weather_parse(summary_json, alerts_json, ripe_map):
+    """Pure parsing: IODA summary + alerts payloads and a RIPEstat
+    map {code: {"v4_prefixes_ris": n, "v6_prefixes_ris": n}} -> the
+    {totals, countries, events} core of the weather store. No I/O,
+    no clock — unit-tested directly."""
+    ripe_map = ripe_map if isinstance(ripe_map, dict) else {}
+    rows = []
+    if isinstance(summary_json, dict) and isinstance(
+            summary_json.get("data"), list):
+        rows = summary_json["data"]
+    parsed = []
+    max_overall = 0.0
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        code, name = _wx_entity(row.get("entity"))
+        if not code:
+            continue
+        scores = row.get("scores") if isinstance(
+            row.get("scores"), dict) else {}
+        overall = _wx_num(scores.get("overall"))
+        overall = overall if overall is not None else 0.0
+        max_overall = max(max_overall, overall)
+        try:
+            events = int(row.get("event_cnt") or 0)
+        except (TypeError, ValueError):
+            events = 0
+        parsed.append((code, name or code, scores, overall, events))
+    countries = []
+    for code, name, scores, overall, events in parsed:
+        if max_overall > 0:
+            intensity = round(100 * math.log10(overall + 1)
+                              / math.log10(max_overall + 1))
+        else:
+            intensity = 0
+        lat, lon = COUNTRY_COORDS.get(code, (None, None))
+        ripe = ripe_map.get(code) or {}
+        countries.append({
+            "code": code, "name": name, "lat": lat, "lon": lon,
+            "events": events, "signals": _wx_signals(scores),
+            # "score" is the raw IODA overall score, unmodified.
+            "score": overall, "intensity": intensity,
+            "ripe_v4": ripe.get("v4_prefixes_ris"),
+            "ripe_v6": ripe.get("v6_prefixes_ris"),
+        })
+    alert_rows = []
+    if isinstance(alerts_json, dict) and isinstance(
+            alerts_json.get("data"), list):
+        alert_rows = [a for a in alerts_json["data"]
+                      if isinstance(a, dict)]
+    alerts = []
+    for a in alert_rows:
+        code, name = _wx_entity(a.get("entity"))
+        alerts.append({
+            "ts": _wx_ts(a.get("time")), "code": code,
+            "name": name or code,
+            "datasource": str(a.get("datasource") or ""),
+            "level": str(a.get("level") or ""),
+            "condition": str(a.get("condition") or ""),
+        })
+    # Notable first: every non-"normal" alert (input is newest-first),
+    # then the most recent remaining alerts, at most 12 total.
+    notable = [a for a in alerts
+               if a["level"].strip().lower() != "normal"]
+    rest = [a for a in alerts if a["level"].strip().lower() == "normal"]
+    events_list = (notable + rest)[:12]
+    totals = {
+        "countries_affected": len(countries),
+        "outage_events": sum(c["events"] for c in countries),
+        "alerts_24h": len(alerts),
+    }
+    return {"totals": totals, "countries": countries,
+            "events": events_list}
+
+
+def _ripe_parse(payload):
+    """One RIPEstat country-routing-stats payload -> the prefix
+    counts at the last timeline point, or None. Defensive about the
+    real shape: data.stats may be a list whose first entry carries a
+    timeline list; key spellings are probed, never assumed."""
+    try:
+        if not isinstance(payload, dict):
+            return None
+        data = payload.get("data")
+        if not isinstance(data, dict):
+            return None
+        stats = data.get("stats")
+        if isinstance(stats, list):
+            stats = stats[0] if stats else {}
+        if not isinstance(stats, dict):
+            return None
+        timeline = stats.get("timeline")
+        if isinstance(timeline, list):
+            point = timeline[-1] if timeline else {}
+        elif isinstance(timeline, dict):
+            point = timeline
+        else:
+            point = stats
+
+        def _pick(*keys):
+            for k in keys:
+                v = _wx_num(point.get(k)) if isinstance(point, dict) else None
+                if v is not None:
+                    return int(v)
+            return None
+
+        v4 = _pick("v4_prefixes_ris", "v4_prefixes", "ipv4_prefixes_ris")
+        v6 = _pick("v6_prefixes_ris", "v6_prefixes", "ipv6_prefixes_ris")
+        if v4 is None and v6 is None:
+            return None
+        return {"v4_prefixes_ris": v4, "v6_prefixes_ris": v6}
+    except Exception:
+        return None
+
+
+async def fetch_internet_weather(timeout=20):
+    """IODA outage summary + alerts for the trailing 24h, enriched
+    with RIPEstat routing stats for the top 6 countries by score."""
+    out = {"updated": _now(), "status": "error", "window_hours": 24,
+           "sources": {"ioda": "error", "ripestat": "error"},
+           "totals": {"countries_affected": 0, "outage_events": 0,
+                      "alerts_24h": 0},
+           "countries": [], "events": [], "error": None}
+    now = int(time.time())
+    frm, until = now - 86400, now
+    base = "https://api.ioda.inetintel.cc.gatech.edu/v2/outages"
+    summary_url = (f"{base}/summary?from={frm}&until={until}"
+                   "&entityType=country&limit=60&orderBy=score/desc")
+    alerts_url = (f"{base}/alerts?from={frm}&until={until}"
+                  "&entityType=country&limit=40&orderBy=time/desc")
+    try:
+        async with _make_client() as client:
+            summary_json = alerts_json = None
+            ok_count = 0
+            err_names = []
+            try:
+                r = await _get(client, summary_url, timeout)
+                summary_json = r.json()
+                ok_count += 1
+            except Exception as e:
+                log.warning("internet weather summary failed: %r", e)
+                err_names.append(type(e).__name__)
+            try:
+                r = await _get(client, alerts_url, timeout)
+                alerts_json = r.json()
+                ok_count += 1
+            except Exception as e:
+                log.warning("internet weather alerts failed: %r", e)
+                err_names.append(type(e).__name__)
+            if ok_count == 0:
+                # IODA failed entirely: honest error, empty lists,
+                # class name only (the store error discipline).
+                out["error"] = ("IODA unavailable ("
+                                + ", ".join(err_names) + ")")
+                return out
+            # RIPEstat enrichment for the top 6 by IODA score.
+            prelim = _weather_parse(summary_json, alerts_json, {})
+            top = sorted(prelim["countries"],
+                         key=lambda c: -(c["score"] or 0))[:6]
+            ripe_map = {}
+            ripe_ok = 0
+            if top:
+                async def _ripe(cc):
+                    try:
+                        r = await _get(
+                            client,
+                            "https://stat.ripe.net/data/"
+                            "country-routing-stats/data.json"
+                            f"?resource={cc}", timeout)
+                        parsed = _ripe_parse(r.json())
+                        return cc, parsed
+                    except Exception:
+                        return cc, None
+
+                for cc, parsed in await asyncio.gather(
+                        *(_ripe(c["code"]) for c in top)):
+                    if parsed is not None:
+                        ripe_map[cc] = parsed
+                        ripe_ok += 1
+                if ripe_ok == len(top):
+                    ripe_status = "ok"
+                elif ripe_ok:
+                    ripe_status = "partial"
+                else:
+                    ripe_status = "error"
+            else:
+                ripe_status = "ok"
+            core = _weather_parse(summary_json, alerts_json, ripe_map)
+            out.update(core)
+            out["sources"] = {
+                "ioda": "ok" if ok_count == 2 else "error",
+                "ripestat": ripe_status}
+            if ok_count == 2 and ripe_status == "ok":
+                out["status"] = "ok"
+            else:
+                out["status"] = "degraded"
+                out["error"] = (
+                    "One or more sources unavailable "
+                    f"(ioda={out['sources']['ioda']}, "
+                    f"ripestat={ripe_status})")
+            return out
+    except Exception as e:
+        log.warning("fetch_internet_weather failed: %r", e)
+        out["status"] = "error"
+        out["error"] = f"Internet weather unavailable ({type(e).__name__})"
+        return out
+
+
+# ------------------------------------------------------------------- kev
+# Sentinel Threat Level input 2026-10-27: CISA's Known Exploited
+# Vulnerabilities catalog (keyless JSON feed).
+
+KEV_URL = ("https://www.cisa.gov/sites/default/files/feeds/"
+           "known_exploited_vulnerabilities.json")
+
+
+def _kev_parse(payload, today=None):
+    """Pure parsing of the KEV catalog: totals over UTC dates.
+    The trailing-7-days window includes today (today-6 .. today).
+    added_dates is the sorted list of distinct in-window dates."""
+    if today is None:
+        today = datetime.now(timezone.utc).date()
+    vulns = []
+    if isinstance(payload, dict) and isinstance(
+            payload.get("vulnerabilities"), list):
+        vulns = payload["vulnerabilities"]
+    start = today.toordinal() - 6
+    added_7d = added_today = 0
+    dates = set()
+    for v in vulns:
+        if not isinstance(v, dict):
+            continue
+        raw = str(v.get("dateAdded") or "").strip()
+        try:
+            day = datetime.strptime(raw, "%Y-%m-%d").date()
+        except (TypeError, ValueError):
+            continue
+        if start <= day.toordinal() <= today.toordinal():
+            added_7d += 1
+            dates.add(raw)
+            if day == today:
+                added_today += 1
+    return {"total": len(vulns), "added_7d": added_7d,
+            "added_today": added_today,
+            "added_dates": sorted(dates)}
+
+
+async def fetch_kev(timeout=20):
+    """Fetch + count the CISA KEV catalog. On any failure an honest
+    error dict with zero counts — never invented numbers."""
+    out = {"updated": _now(), "status": "error", "total": 0,
+           "added_7d": 0, "added_today": 0, "added_dates": []}
+    try:
+        async with _make_client(follow_redirects=True) as client:
+            r = await _get(client, KEV_URL, timeout)
+            parsed = _kev_parse(r.json())
+        out.update(parsed)
+        out["status"] = "ok"
+    except Exception as e:
+        log.warning("fetch_kev failed: %r", e)
+    return out
 
 
 # --------------------------------------------------------------- live traffic

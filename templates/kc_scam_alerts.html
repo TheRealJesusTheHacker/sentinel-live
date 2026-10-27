@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}KC Scam Alerts{% endblock %}
+{% block og_title %}KC Scam Alerts — Kansas City metro scam and fraud warnings{% endblock %}
+{% block og_description %}Scam and fraud alerts for the Kansas City metro from Sentinel Safeguard: what is going around, how to spot it, and what to do, as alerts are published.{% endblock %}
+{% block content %}
+<section class="pagehead rv">
+  <h1>KC <span class="grn">Scam Alerts</span></h1>
+  <p class="sub">Scam and fraud warnings for the Kansas City metro —
+  the calls, texts, emails, and doorstep pitches going around
+  Kansas City area homes and businesses right now, posted when
+  Sentinel publishes a Kansas City alert on Sentinel News.
+  Follow along by <a href="/kc-scam-alerts/feed.xml">RSS</a> if
+  that is how you read.</p>
+</section>
+
+{% if items %}
+<section class="ins-list rv">
+  {% for item in items %}
+  <article class="ins-card">
+    <p class="ins-date"><time datetime="{{ item.date }}">{{ item.date_long }}</time><span class="news-tag">{{ item.tag }}</span></p>
+    <h2><a href="{{ item.url }}">{{ item.title }}</a></h2>
+    <p class="ins-dek">{{ item.summary }}</p>
+    {% if item.source_name %}<p class="ins-dek">Source: {{ item.source_name }}</p>{% endif %}
+    <p><a class="btn-link" href="{{ item.url }}">Read the alert &rarr;</a></p>
+  </article>
+  {% endfor %}
+</section>
+{% include "_reader_cta.html" %}
+{% else %}
+<section class="rv">
+  <h2>No active alerts posted right now</h2>
+  <p>Alerts appear here when a Kansas City&ndash;area scam or fraud
+  warning is published on Sentinel News. Nothing posted means
+  nothing new has been flagged for the Kansas City metro — quiet
+  is good news, and this page updates the moment a new alert
+  lands.</p>
+</section>
+{% include "_reader_cta.html" %}
+{% endif %}
+{% endblock %}

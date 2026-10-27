@@ -45,11 +45,18 @@ CANONICAL_NAV = [
     # its morning launch; the owner ordered it promoted to its
     # own header tab the same day. The canonical set is now 15.
     ("/sentinel-news", "Sentinel News"),
+    # NEW-PAGES-2026-10-27 (owner order 2026-10-27): KC Scam
+    # Alerts joins the nav immediately after Sentinel News and
+    # Internet Weather immediately after Flights; the canonical
+    # set is now 17 (was 15).
+    ("/kc-scam-alerts", "KC Scam Alerts"),
     ("/privacy", "Privacy"),
     ("/operations", "Operations"),
     ("/threat-map", "Threat Map"),
     ("/geopolitical", "Geopolitical"),
     ("/flights", "Flights"),
+    # NEW-PAGES-2026-10-27: see the KC Scam Alerts note above.
+    ("/internet-weather", "Internet Weather"),
     (LIBRARY, "Library"),
     ("/report-issue", "Report an Issue"),
     ("/contact", "Contact"),
@@ -69,6 +76,11 @@ CANONICAL_FOOTER = [
     # above is now 15); it stays in the footer too — this footer
     # set itself is unchanged by the promotion.
     ("/sentinel-news", "Sentinel News"),
+    # NEW-PAGES-2026-10-27 (owner order 2026-10-27): KC Scam
+    # Alerts joins the footer after Sentinel News; Internet
+    # Weather joins after Operations (the footer's live-views
+    # entry — the footer carries no Flights link to follow).
+    ("/kc-scam-alerts", "KC Scam Alerts"),
     # ESTATE-2026-10-25: the sweep's new public pages join the
     # FOOTER only — the header band stays at the canonical 14 (its
     # tightening band is load-bearing; see the WWP census pin;
@@ -79,6 +91,8 @@ CANONICAL_FOOTER = [
     ("/faq", "FAQ"),
     ("/privacy", "Privacy"),
     ("/operations", "Operations"),
+    # NEW-PAGES-2026-10-27: see the KC Scam Alerts note above.
+    ("/internet-weather", "Internet Weather"),
     (LIBRARY, "Library"),
     ("/availability", "Availability"),
     ("/disclosure", "Disclosure"),
@@ -199,7 +213,10 @@ APP_PAGES = ["/operations", "/threat-map", "/geopolitical", "/flights",
              "/about", "/services", "/who-we-protect", "/how-it-works",
              "/insights", "/insights/patch-day-is-today", "/contact",
              "/privacy", "/assessment", "/tools", "/training/phishing",
-             "/faq", "/disclosure", "/availability", "/sentinel-news"]
+             "/faq", "/disclosure", "/availability", "/sentinel-news",
+             # NEW-PAGES-2026-10-27: the two new app pages render
+             # the same canonical chrome.
+             "/kc-scam-alerts", "/internet-weather"]
 STATIC_PAGES = ["/", "/index.html", "/report-issue", "/ticket"]
 
 
