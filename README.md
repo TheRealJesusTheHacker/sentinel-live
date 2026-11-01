@@ -350,6 +350,12 @@ payments service never needs a public port of its own. While it is off
 (the default), nothing changes: the payments routes do not exist on
 this server, and a request to them is a plain `404`.
 
+> **Name note:** HackProof as the education product has been replaced
+> by **Sentinel Academy** ([academy.sentinelsafeguard.net](https://academy.sentinelsafeguard.net)).
+> `hackproof_payments` in this section is the existing name in this
+> server's code and config for this optional pass-through, so it is
+> kept as-is here to match the code.
+
 To turn it on:
 
 1. **Set the payments service up on the same machine first**, following
