@@ -306,10 +306,10 @@ def test_services_developer_tribute_links_public_proof(app_mod):
     for proof in (
         "Sentinel's President is a working developer",
         "Technician's Toolkit",
-        "HackProof",
+        "Sentinel Academy",
         "https://github.com/TheRealJesusTheHacker/Technicians-Toolkit",
         "https://github.com/TheRealJesusTheHacker/Sphinx/releases",
-        "https://github.com/TheRealJesusTheHacker/HackProof",
+        "https://academy.sentinelsafeguard.net",
         "built by the people who test other people's",
         "Eight technician tools",
         "Windows, Android, and Debian",
