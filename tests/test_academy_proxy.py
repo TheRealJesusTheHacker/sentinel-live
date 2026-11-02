@@ -1,4 +1,4 @@
-"""HackProof payments pass-through tests.
+"""Sentinel Academy payments pass-through tests.
 
 Loads app.py from a scratch copy (its own config.yaml, data/ and logs/)
 so both the disabled and enabled configurations can be imported in one
@@ -101,7 +101,7 @@ class Stub:
 @pytest.fixture(scope="module")
 def disabled_app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-disabled")
-    # No hackproof_payments section at all: the defaults must govern.
+    # No academy_payments section at all: the defaults must govern.
     return _load_app(tmp, "sl_app_disabled", "server:\n  port: 8443\n")
 
 
@@ -109,7 +109,7 @@ def disabled_app(tmp_path_factory):
 def enabled(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-enabled")
     mod = _load_app(tmp, "sl_app_enabled",
-                    "hackproof_payments:\n  enabled: true\n"
+                    "academy_payments:\n  enabled: true\n"
                     "  upstream: \"http://127.0.0.1:9\"\n")
     stub = Stub()
     mod._get_payments_client = stub.client  # route the proxy at the stub
@@ -120,7 +120,7 @@ def enabled(tmp_path_factory):
 def down_app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-down")
     mod = _load_app(tmp, "sl_app_down",
-                    "hackproof_payments:\n  enabled: true\n"
+                    "academy_payments:\n  enabled: true\n"
                     "  upstream: \"http://127.0.0.1:9\"\n")
 
     def dead_handler(request: httpx.Request) -> httpx.Response:
@@ -258,7 +258,7 @@ def test_order_id_traversal_is_rejected(enabled):
 def ratelimit_app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-ratelimit")
     mod = _load_app(tmp, "sl_app_ratelimit",
-                    "hackproof_payments:\n  enabled: true\n"
+                    "academy_payments:\n  enabled: true\n"
                     "  upstream: \"http://127.0.0.1:9\"\n")
     stub = Stub()
     mod._get_payments_client = stub.client
@@ -279,7 +279,7 @@ def test_proxy_posts_are_rate_limited(ratelimit_app):
 def big_app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-big")
     mod = _load_app(tmp, "sl_app_big",
-                    "hackproof_payments:\n  enabled: true\n"
+                    "academy_payments:\n  enabled: true\n"
                     "  upstream: \"http://127.0.0.1:9\"\n")
 
     def big_handler(request: httpx.Request) -> httpx.Response:
@@ -306,7 +306,7 @@ def test_oversized_upstream_response_is_clean_502(big_app):
 def bad_upstream_app(tmp_path_factory):
     tmp = tmp_path_factory.mktemp("sl-badupstream")
     return _load_app(tmp, "sl_app_badupstream",
-                     "hackproof_payments:\n  enabled: true\n"
+                     "academy_payments:\n  enabled: true\n"
                      "  upstream: \"http://127.0.0.1:8787@evil.example\"\n")
 
 
@@ -457,3 +457,29 @@ def test_cors_list_star_entry_is_dropped(cors_list_star_app):
     assert "access-control-allow-origin" not in evil.headers
     ok = client.get("/health", headers={"Origin": "https://ok.example"})
     assert ok.headers.get("access-control-allow-origin") == "https://ok.example"
+
+
+@pytest.fixture(scope="module")
+def legacy_enabled(tmp_path_factory):
+    tmp = tmp_path_factory.mktemp("sl-legacy")
+    # Pre-rename section key (2026-11-02 rename pass): existing live
+    # configs still carry it, so it must keep working as a fallback.
+    mod = _load_app(tmp, "sl_app_legacy",
+                    "hackproof_payments:\n  enabled: true\n"
+                    "  upstream: \"http://127.0.0.1:9\"\n")
+    stub = Stub()
+    mod._get_payments_client = stub.client  # route the proxy at the stub
+    return mod, stub
+
+
+def test_legacy_section_key_still_enables_proxy(legacy_enabled):
+    """Rename-pass compatibility: a config still carrying the
+    pre-rename section key enables the same pass-through, with the
+    upstream it names."""
+    mod, stub = legacy_enabled
+    assert mod.HP_PAYMENTS_ENABLED is True
+    assert mod.HP_PAYMENTS_UPSTREAM == "http://127.0.0.1:9"
+    client = TestClient(mod.app, raise_server_exceptions=False)
+    resp = client.post("/api/orders", json={"email": "buyer@example.com"})
+    assert resp.status_code == 201
+    assert resp.content == ORDER_BODY

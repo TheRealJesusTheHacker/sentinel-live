@@ -7,7 +7,7 @@ Serves:
   * 4 live pages: /threat-map  /geopolitical  /flights  /news
   * website backend APIs: contact form, Get Help tickets, newsletter signup
   * admin API + page (localhost-only, or X-Admin-Key)
-  * optional HackProof payments pass-through (config-gated, default off)
+  * optional Sentinel Academy payments pass-through (config-gated, default off)
 All persistent storage is an embedded SQLite file next to the exe.
 Logs go to ./logs/server.log (there is no console in the .exe build).
 """
@@ -117,10 +117,10 @@ DEFAULT_CONFIG = {
     # endpoint is OFF (404 to everything), exactly like a missing
     # internal token file.
     "news_push_key_sha256": "",
-    # Optional HackProof payments pass-through (default OFF): when enabled,
+    # Optional Sentinel Academy payments pass-through (default OFF): when enabled,
     # the three public payments routes are proxied to the payments service
     # running on this same machine (see the proxy section below).
-    "hackproof_payments": {"enabled": False,
+    "academy_payments": {"enabled": False,
                            "upstream": "http://127.0.0.1:8787"},
     # SL6-1: default is NO cross-origin access. The old default of ["*"]
     # combined with the localhost admin bypass let any website the owner
@@ -163,6 +163,14 @@ DEFAULT_CONFIG = {
 _config_warnings = []
 
 
+# The payments pass-through section was renamed in the 2026-11-02
+# Sentinel Academy rename pass: academy_payments is the current key.
+# The pre-rename key below is still honored as a fallback (load_config
+# aliases it before the defaults merge) so an existing live config
+# keeps working unchanged.
+_LEGACY_PAYMENTS_SECTION = "hackproof_payments"
+
+
 def load_config() -> dict:
     if not CONFIG_PATH.exists():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
@@ -181,6 +189,12 @@ def load_config() -> dict:
             f"config top level is {type(cfg).__name__}, not a mapping; "
             "ignoring the file and using defaults")
         cfg = {}
+    # Rename pass 2026-11-02: if the file carries only the pre-rename
+    # payments section, treat it as the current academy_payments
+    # section (the current key wins when both are present).
+    if not isinstance(cfg.get("academy_payments"), dict) \
+            and isinstance(cfg.get(_LEGACY_PAYMENTS_SECTION), dict):
+        cfg["academy_payments"] = cfg[_LEGACY_PAYMENTS_SECTION]
     # deep-merge defaults so missing keys never crash the app
     merged = json.loads(json.dumps(DEFAULT_CONFIG))
 
@@ -225,6 +239,14 @@ for _w in _config_warnings:
 _config_warnings.clear()
 
 
+def _payments_cfg_section(cfg):
+    """Effective payments section: current key first, legacy fallback."""
+    section = cfg.get("academy_payments")
+    if not isinstance(section, dict):
+        section = cfg.get(_LEGACY_PAYMENTS_SECTION)
+    return section
+
+
 def _validate_config_schema():
     """SL2-1: critical numeric settings with wrong types get their default
     back instead of crashing the server or the refresh loops."""
@@ -246,16 +268,16 @@ def _validate_config_schema():
                 log.warning("config: feeds.%s invalid (%r); using default %r",
                             _key, _v, DEFAULT_CONFIG["feeds"][_key])
                 fcfg[_key] = DEFAULT_CONFIG["feeds"][_key]
-    hpcfg = config.get("hackproof_payments")
+    hpcfg = _payments_cfg_section(config)
     if isinstance(hpcfg, dict):
         # Only a literal true enables the pass-through — a truthy string
         # from a hand-edited config must not silently open the routes.
         if not isinstance(hpcfg.get("enabled"), bool):
-            log.warning("config: hackproof_payments.enabled invalid (%r); "
+            log.warning("config: academy_payments.enabled invalid (%r); "
                         "using default %r",
                         hpcfg.get("enabled"),
-                        DEFAULT_CONFIG["hackproof_payments"]["enabled"])
-            hpcfg["enabled"] = DEFAULT_CONFIG["hackproof_payments"]["enabled"]
+                        DEFAULT_CONFIG["academy_payments"]["enabled"])
+            hpcfg["enabled"] = DEFAULT_CONFIG["academy_payments"]["enabled"]
         _up = hpcfg.get("upstream")
         # BH2-10: the pass-through is defined as fronting a service on
         # THIS machine — so the upstream must be a bare loopback origin:
@@ -282,10 +304,10 @@ def _validate_config_schema():
             except ValueError:
                 _up_ok = False
         if not _up_ok:
-            log.warning("config: hackproof_payments.upstream invalid (%r); "
+            log.warning("config: academy_payments.upstream invalid (%r); "
                         "using default %r", _up,
-                        DEFAULT_CONFIG["hackproof_payments"]["upstream"])
-            hpcfg["upstream"] = DEFAULT_CONFIG["hackproof_payments"]["upstream"]
+                        DEFAULT_CONFIG["academy_payments"]["upstream"])
+            hpcfg["upstream"] = DEFAULT_CONFIG["academy_payments"]["upstream"]
     # S3-1: tunnel.enabled drives three trust decisions with plain
     # truthiness — _real_ip() trusting CF-Connecting-IP, the admin
     # localhost bypass switching off, and the briefing endpoint
@@ -294,7 +316,7 @@ def _validate_config_schema():
     # tunnel were ON while the operator believed it OFF: localhost
     # admin locked out, and any direct caller could spoof
     # CF-Connecting-IP to pick their own rate-limit bucket. Same
-    # type-confusion family as BH2-12 / the hackproof_payments.enabled
+    # type-confusion family as BH2-12 / the academy_payments.enabled
     # check above: only a literal bool is honored.
     tcfg = config.get("tunnel")
     if isinstance(tcfg, dict):
@@ -4028,10 +4050,11 @@ async def admin_ticket_update(request: Request, ticket_id: int):
     return {"ok": True, "id": ticket_id, "status": new_status}
 
 
-# ------------------------------------------------------- HackProof payments
-# Optional pass-through to the HackProof payments service (payments/** in
-# the HackProof repo), which runs on this same machine bound to loopback.
-# Config: hackproof_payments.enabled (default OFF — the routes below do
+# ------------------------------------------------- Sentinel Academy payments
+# Optional pass-through to the Sentinel Academy payments service
+# (payments/** in the Academy codebase), which runs on this same machine
+# bound to loopback.
+# Config: academy_payments.enabled (default OFF — the routes below do
 # not exist at all while it is off). When enabled, Sentinel Live fronts
 # the service so one server faces the world and the payments service
 # never needs a port of its own exposed.
@@ -4039,7 +4062,9 @@ async def admin_ticket_update(request: Request, ticket_id: int):
 # ONLY the three public payments routes are proxied. /api/admin/* is
 # NEVER proxied: the payments review queue stays reachable only directly
 # on loopback, behind its own admin token.
-_hp_cfg = config.get("hackproof_payments") or {}
+_hp_cfg = _payments_cfg_section(config)
+if not isinstance(_hp_cfg, dict):
+    _hp_cfg = {}
 HP_PAYMENTS_ENABLED = bool(_hp_cfg.get("enabled"))
 HP_PAYMENTS_UPSTREAM = str(
     _hp_cfg.get("upstream") or "http://127.0.0.1:8787").rstrip("/")
@@ -4077,7 +4102,7 @@ def _hp_rate_limit(request: Request, category: str, max_hits: int):
     key = (category, ip)
     keep = [t for t in _hp_hits[key] if now - t < 600]
     if len(keep) >= max_hits:
-        log.warning("hackproof proxy rate-limit 429: ip=%s route=%s",
+        log.warning("academy proxy rate-limit 429: ip=%s route=%s",
                     ip, category)
         raise HTTPException(429, "Too many requests — please slow down "
                                  "and retry.")
@@ -4120,21 +4145,21 @@ async def _proxy_payments(request: Request, upstream_path: str):
             async for chunk in resp.aiter_bytes():
                 total += len(chunk)
                 if total > HP_PROXY_MAX_RESPONSE_BYTES:
-                    log.warning("hackproof payments upstream response "
+                    log.warning("academy payments upstream response "
                                 "too large: %s %s", request.method,
                                 upstream_path)
                     raise HTTPException(
-                        502, "The HackProof payment service returned "
+                        502, "The Sentinel Academy payment service returned "
                              "an oversized response — please try again "
                              "later.")
                 chunks.append(chunk)
             status = resp.status_code
             ctype = resp.headers.get("content-type", "application/json")
     except httpx.HTTPError:
-        log.warning("hackproof payments upstream unreachable: %s %s",
+        log.warning("academy payments upstream unreachable: %s %s",
                     request.method, upstream_path)
         raise HTTPException(
-            502, "The HackProof payment service is unavailable right now "
+            502, "The Sentinel Academy payment service is unavailable right now "
                  "— please try again in a few minutes.")
     return Response(content=b"".join(chunks), status_code=status,
                     headers={"Content-Type": ctype})
@@ -4171,7 +4196,7 @@ if HP_PAYMENTS_ENABLED:
         _hp_rate_limit(request, "certificates", 10)
         return await _proxy_payments(request, "/api/certificates")
 
-    log.info("HackProof payments pass-through enabled (upstream %s)",
+    log.info("Sentinel Academy payments pass-through enabled (upstream %s)",
              HP_PAYMENTS_UPSTREAM)
 
 

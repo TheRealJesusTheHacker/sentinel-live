@@ -1,7 +1,7 @@
 """Cloudflare Turnstile bot-check tests for the public form handlers.
 
 Loads app.py from a scratch copy (its own config.yaml, data/ and
-logs/) the same way test_hackproof_proxy.py does, and stubs the one
+logs/) the same way test_academy_proxy.py does, and stubs the one
 network seam — app._turnstile_siteverify — so the suite stays
 hermetic: no test here talks to Cloudflare. (The live pairing of the
 real endpoint with Cloudflare's published always-pass / always-fail

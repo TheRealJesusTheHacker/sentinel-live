@@ -33,10 +33,11 @@ Sentinel Live does three jobs in one process:
    `fetch()` this server's JSON APIs. Contact messages, Get Help tickets, and
    newsletter signups are validated, rate-limited, and stored in an embedded
    SQLite database — there is no external database to run.
-3. **Optional HackProof payments pass-through.** Config-gated and off by
-   default, it fronts exactly three public routes of a HackProof payments
-   service that stays bound to loopback on the same machine. Details in
-   [HackProof payments pass-through](#hackproof-payments-pass-through-optional-off-by-default).
+3. **Optional Sentinel Academy payments pass-through.** Config-gated and
+   off by default, it fronts exactly three public routes of a Sentinel
+   Academy payments service that stays bound to loopback on the same
+   machine. Details in
+   [Sentinel Academy payments pass-through](#sentinel-academy-payments-pass-through-optional-off-by-default).
 
 By default the server binds only to `127.0.0.1:8443`. Public exposure, when
 wanted, is via an optional Cloudflare Tunnel — the server itself does not need
@@ -289,8 +290,8 @@ defaults only.
 | `admin_key_sha256` | `""` | SHA-256 hex digest of the admin key. When set, allows admin access via the `X-Admin-Key` header carrying the key itself (the key is never stored). See the admin rules under [Security notes](#security-notes) |
 | `admin_key` | `""` | DEPRECATED transition field: the plaintext admin key, honored only while no `admin_key_sha256` is set. Migrate with `python tools/hash_admin_key.py config.yaml` (in place, value never printed, timestamped 600 backup) and restart |
 | `cors_origins` | `[]` | Exact cross-origin allowlist. Empty = no cross-origin access. Never `"*"` — a `"*"` entry is dropped at startup (see Security notes) |
-| `hackproof_payments.enabled` | `false` | Turn the HackProof payments pass-through on or off |
-| `hackproof_payments.upstream` | `"http://127.0.0.1:8787"` | Payments service address. Must be a bare loopback origin; anything else falls back to this default |
+| `academy_payments.enabled` | `false` | Turn the Sentinel Academy payments pass-through on or off |
+| `academy_payments.upstream` | `"http://127.0.0.1:8787"` | Payments service address. Must be a bare loopback origin; anything else falls back to this default |
 | `rss.geopolitical` | Al Jazeera, BBC World, DW (see file) | RSS sources for the geopolitical page |
 | `rss.news_sections` | National / Missouri / Kansas City / Geopolitical / Cyber / Political / Markets (see file) | RSS sources per news section. Add or remove freely; failures are tolerated per feed |
 | `logging.file` | `"logs/server.log"` | Log location (relative to the install folder) |
@@ -341,30 +342,31 @@ returns `400`. Story URLs are sanitized on ingest (non-`http(s)` schemes are
 blanked), and a stored briefing that is not a JSON object is ignored on load
 instead of breaking `/news`.
 
-## HackProof payments pass-through (optional, off by default)
+## Sentinel Academy payments pass-through (optional, off by default)
 
-Sentinel Live can also front the **HackProof payments service** (the
-`payments/` program in the HackProof repo — automated Bitcoin checkout
-and certificate delivery), so one server faces the world and the
+Sentinel Live can also front the **Sentinel Academy payments service**
+(the `payments/` program in the Sentinel Academy codebase — automated
+Bitcoin checkout and certificate delivery), so one server faces the world and the
 payments service never needs a public port of its own. While it is off
 (the default), nothing changes: the payments routes do not exist on
 this server, and a request to them is a plain `404`.
 
-> **Name note:** HackProof as the education product has been replaced
-> by **Sentinel Academy** ([academy.sentinelsafeguard.net](https://academy.sentinelsafeguard.net)).
-> `hackproof_payments` in this section is the existing name in this
-> server's code and config for this optional pass-through, so it is
-> kept as-is here to match the code.
+> **Name note (2026-11-02):** the education product's current name is
+> **Sentinel Academy** ([academy.sentinelsafeguard.net](https://academy.sentinelsafeguard.net)).
+> This pass-through, its config section, and the code identifiers were
+> renamed to Sentinel Academy naming in the 2026-11-02 rename pass.
+> Configs written before the rename keep working unchanged: the
+> previous section key is still read as a fallback (see `app.py`).
 
 To turn it on:
 
 1. **Set the payments service up on the same machine first**, following
-   its own README ("Host setup" in the HackProof repo's
+   its own README ("Host setup" in the Sentinel Academy codebase's
    `payments/README.md`) — its configuration, key store, and startup
    recipe live there, not here. It listens on loopback only — leave
    it that way.
 2. **Flip one switch** in this server's `config.yaml`:
-   `hackproof_payments.enabled: true` (the `upstream` next to it is
+   `academy_payments.enabled: true` (the `upstream` next to it is
    already the right address). If your buy page is hosted on a
    different origin, also add that exact origin to `cors_origins` —
    never `*`.
@@ -378,7 +380,7 @@ To turn it on:
    | `POST /api/certificates` | Rate-limited per IP |
 
 4. **Point the storefront at this server**: the site's
-   `PAYMENTS_API_BASE` and the app's `HACKPROOF_SERVICE_BASE_URL` both
+   `PAYMENTS_API_BASE` and the app's `ACADEMY_SERVICE_BASE_URL` both
    become this server's public base URL.
 
 How the proxy behaves, as implemented in `app.py`:
@@ -519,7 +521,7 @@ python -m pytest tests/ --collect-only
 python -m pytest tests/
 ```
 
-The suite is fourteen files — `tests/test_hackproof_proxy.py` (22 tests),
+The suite is fourteen files — `tests/test_academy_proxy.py` (23 tests),
 `tests/test_turnstile.py` (7 tests), `tests/test_front_door.py`
 (4 tests), `tests/test_bughunt_2026_10_23.py` (17 tests),
 `tests/test_visitors_2026_10_23.py` (10 tests; public visitor logging),

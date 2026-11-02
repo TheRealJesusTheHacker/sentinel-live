@@ -8,7 +8,7 @@ Without a site dir (e.g. the packaged server build), GET / falls back
 to the operations landing instead of 404ing.
 
 Loads app.py from a scratch copy the same way
-test_hackproof_proxy.py does, with and without a seeded site dir.
+test_academy_proxy.py does, with and without a seeded site dir.
 """
 import importlib.util
 import shutil
